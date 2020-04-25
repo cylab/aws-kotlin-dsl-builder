@@ -67,9 +67,11 @@ fun collectionDSL(model: CollectionDSLModel) =
 
 fun typeDSL(model: TypeDSLModel) =
   """
+  @file:Suppress("DEPRECATION")
   package ${model.packageName}
   
   import kotlin.DeprecationLevel.HIDDEN
+  import kotlin.DeprecationLevel.WARNING
   ${imports(model.imports)}
 
   /**
@@ -77,7 +79,8 @@ fun typeDSL(model: TypeDSLModel) =
     */
   ${annotations(model.annotations)}
   class ${model.name} {
-    private val builder = ${model.targetType}.builder()
+    @Deprecated("Usage of the builder field is not recommended. It might vanish in any new release!", level = WARNING)
+    internal val builder = ${model.targetType}.builder()
     internal fun build(): ${model.targetType} = builder.build()
     ${dslProperties(model.dslProperties)}
     ${dslFunctions(model.dslFunctions)}
@@ -87,15 +90,9 @@ fun typeDSL(model: TypeDSLModel) =
   /**
     * ${comment(model.comment)}
     */
-  fun ${model.dslEntrypoint}() = ${model.name}().build()
-
-  """ +
-  if(model.hasDslBlock())
-  """
   fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
     ${model.name}().apply(dslBlock).build()
   """
-  else ""
 
 
 fun dslProperty(model: DSLPropertyModel) =
@@ -103,7 +100,6 @@ fun dslProperty(model: DSLPropertyModel) =
   /**
     * ${comment(model.comment)}
     */
-  @get:JvmSynthetic // Hide from Java callers
   var ${model.name}: ${model.targetType}
     @Deprecated("", level = HIDDEN) // Hide from Kotlin callers
     get() = throw UnsupportedOperationException()

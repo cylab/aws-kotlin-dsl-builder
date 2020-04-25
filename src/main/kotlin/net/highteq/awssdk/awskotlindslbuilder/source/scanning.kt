@@ -42,7 +42,14 @@ fun scanSource(sourcePackage: String, docs: Docs?) = SourceModel(
 private fun findMethodGroups(type: Class<*>, docs: Docs?) =
   ReflectionUtils
     .getAllDeclaredMethods(type)
-    .filter { it.returnType.name == type.name && it.parameterCount == 1 }
+    .filter { it.parameterCount == 1 }
+    .filterNot {
+      it.name in listOf(
+        "applyMutation",
+        "httpClientBuilder"
+      )
+    }
+//    .filter { it.returnType.name == type.name && it.parameterCount == 1 }
     .map {
       MethodModel(
         name = it.name,

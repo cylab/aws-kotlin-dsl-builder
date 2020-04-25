@@ -57,6 +57,12 @@ internal fun subDSLs(subDSLs: List<SubDSLModel>) = subDSLs
 internal fun dslFunctions(dslFunctions: List<DSLFunctionModel>) = dslFunctions
   .map { dslFunction(it).prependIndent("  ") }.joinToString("\n")
 
+internal fun imports(set: Set<String>) = "import " +
+  set
+    .map {it.replace('$', '.')}
+    .sorted()
+    .joinToString("\n  import ")
+
 internal fun comment(text: String) = text.lines().joinToString("\n    * ")
-internal fun imports(set: Set<String>) = "import " + set.sorted().joinToString("\n  import ")
 internal fun annotations(set: Set<String>) = "@" + set.sorted().joinToString("\n  @")
+
