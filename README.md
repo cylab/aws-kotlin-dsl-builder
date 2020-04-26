@@ -4,6 +4,7 @@ A DSL generator based on reflection and javadoc converted to xml
 
 ## TODOs
 
+- Configure nullability (at least for attributevalue)
 - Automatic download of sources and javadoc xml generation 
 - Convert javadoc html comments to real markdown
 - Switch to generation based solely on javadoc xml, if possible

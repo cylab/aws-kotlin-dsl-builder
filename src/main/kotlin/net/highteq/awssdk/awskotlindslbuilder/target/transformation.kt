@@ -34,11 +34,24 @@ fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: St
     is ParameterizedType -> this.rawType.typeName.substringAfterLast('.') +
       "<" + this.actualTypeArguments.map { it.simpleTypeName() }.joinToString(", ") + ">"
     // TODO: find out, what really needs to be done for a WildcardType
-    is WildcardType -> if (this.lowerBounds.isNotEmpty()) this.lowerBounds[0].simpleTypeName()
-    else if (this.upperBounds.isNotEmpty()) this.upperBounds[0].simpleTypeName()
-    else "Any"
+    is WildcardType -> when {
+      this.lowerBounds.isNotEmpty() -> this.lowerBounds[0].simpleTypeName()
+      this.upperBounds.isNotEmpty() -> this.upperBounds[0].simpleTypeName()
+      else -> "Any"
+    }
     else -> "Should not happen: " + this.javaClass
   }.replace(Regex("^Integer$"), "Int")
+
+  fun Type.nullableMarker(): String = when (this) {
+    is Class<*> -> if (this.isPrimitive) "" else "?"
+    is ParameterizedType -> this.rawType.nullableMarker()
+    is WildcardType -> when {
+      this.lowerBounds.isNotEmpty() -> this.lowerBounds[0].nullableMarker()
+      this.upperBounds.isNotEmpty() -> this.upperBounds[0].nullableMarker()
+      else -> ""
+    }
+    else -> ""
+  }
 
   val dslMarker = DSLMarkerModel(
     targetPackage,
@@ -70,19 +83,21 @@ fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: St
 
       val properties = groups.map { it.primaryProperty }
       val dslProperties = properties.map {
+        val type = it.method.genericParameterTypes[0]
         DSLPropertyModel(
           comment = toMarkdown(it.doc?.comment ?: ""),
           name = it.name,
-          targetType = it.method.genericParameterTypes[0].simpleTypeName()
+          targetType = type.simpleTypeName() + type.nullableMarker()
         )
       }
 
       val functions = groups.mapNotNull { it.secondaryFunction }
       val dslFunctions = functions.map {
+        val type = it.method.genericParameterTypes[0]
         DSLFunctionModel(
           comment = toMarkdown(it.doc?.comment ?: ""),
           name = it.name,
-          targetType = it.method.genericParameterTypes[0].simpleTypeName()
+          targetType = type.simpleTypeName() + type.nullableMarker()
         )
       }
 

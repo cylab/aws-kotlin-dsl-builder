@@ -40,8 +40,8 @@ fun collectionDSL(model: CollectionDSLModel) =
     private val list = ArrayList<${model.targetType}>()
     internal fun build() : List<${model.targetType}> = list
 
-    fun item(init: ${model.targetDSLType}.() -> Unit) {
-      list.add(${model.targetDSLType}().apply(init).build())
+    fun item(dslBlock: ${model.targetDSLType}.() -> Unit) {
+      list.add(${model.targetDSLType}().apply(dslBlock).build())
     }
 
     operator fun ${model.targetType}.unaryPlus() {
