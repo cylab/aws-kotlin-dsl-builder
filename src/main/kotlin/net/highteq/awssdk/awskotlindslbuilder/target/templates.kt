@@ -40,18 +40,52 @@ fun collectionDSL(model: CollectionDSLModel) =
     private val list = ArrayList<${model.targetType}>()
     internal fun build() : List<${model.targetType}> = list
 
-    fun item(dslBlock: ${model.targetDSLType}.() -> Unit) {
+    /**
+      * Receives a sub DSL in 'dslBlock' to build a ${model.targetType} instance
+      * and adds it to the collection built by the enclosing DSL
+      */
+    fun add(dslBlock: ${model.targetDSLType}.() -> Unit) {
       list.add(${model.targetDSLType}().apply(dslBlock).build())
     }
 
+    /**
+      * Adds a ${model.targetType} to the collection built by this DSL
+      */
+    fun add(item: ${model.targetType}) {
+      list.add(item)
+    }
+
+    /**
+      * Adds all given ${model.targetType} instances to the collection built by this DSL
+      */
+    fun addAll(items: Collection<${model.targetType}>) {
+      list.addAll(items)
+    }
+
+    /**
+      * Adds all given ${model.targetType} instances to the collection built by this DSL
+      */
+    infix fun addAll(items: Array<${model.targetType}>) {
+      list.addAll(items)
+    }
+
+    /**
+      * Adds a ${model.targetType} to the collection built by this DSL
+      */
     operator fun ${model.targetType}.unaryPlus() {
       list.add(this)
     }
-  
+
+    /**
+      * Adds all given ${model.targetType} instances to the collection built by this DSL
+      */
     operator fun Collection<${model.targetType}>.unaryPlus() {
       list.addAll(this)
     }
-  
+
+    /**
+      * Adds all given ${model.targetType} instances to the collection built by this DSL
+      */
     operator fun Array<${model.targetType}>.unaryPlus() {
       list.addAll(this)
     }
