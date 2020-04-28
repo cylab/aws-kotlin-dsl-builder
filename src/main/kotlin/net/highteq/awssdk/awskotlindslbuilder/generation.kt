@@ -26,7 +26,7 @@ fun generateDSL(xmlDoc: File, sourcePackage: String, targetPackage: String, outp
 }
 
 private fun <T : DSLFileModel> generateKotlin(generator: (T) -> String, dsls: Collection<T>, parentDir: File) {
-  dsls.sortedBy{ it.name }.forEach { dsl -> generateKotlin(generator, dsl, parentDir) }
+  dsls.sortedBy{ it.name }.forEach { generateKotlin(generator, it, parentDir) }
 }
 
 private fun <T : DSLFileModel> generateKotlin(generator: (T) -> String, dsl: T, parentDir: File) {
