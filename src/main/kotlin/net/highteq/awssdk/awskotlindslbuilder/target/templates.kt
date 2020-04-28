@@ -41,32 +41,11 @@ fun collectionDSL(model: CollectionDSLModel) =
     internal fun build() : List<${model.targetType}> = list
 
     /**
-      * Receives a sub DSL in 'dslBlock' to build a ${model.targetType} instance
-      * and adds it to the collection built by the enclosing DSL
+      * Builds an object of type ${model.targetType} from 
+      * the given DSL in 'dslBlock' and adds it to the collection
       */
-    fun add(dslBlock: ${model.targetDSLType}.() -> Unit) {
+    fun o(dslBlock: ${model.targetDSLType}.() -> Unit) {
       list.add(${model.targetDSLType}().apply(dslBlock).build())
-    }
-
-    /**
-      * Adds a ${model.targetType} to the collection built by this DSL
-      */
-    fun add(item: ${model.targetType}) {
-      list.add(item)
-    }
-
-    /**
-      * Adds all given ${model.targetType} instances to the collection built by this DSL
-      */
-    fun addAll(items: Collection<${model.targetType}>) {
-      list.addAll(items)
-    }
-
-    /**
-      * Adds all given ${model.targetType} instances to the collection built by this DSL
-      */
-    infix fun addAll(items: Array<${model.targetType}>) {
-      list.addAll(items)
     }
 
     /**
@@ -88,6 +67,64 @@ fun collectionDSL(model: CollectionDSLModel) =
       */
     operator fun Array<${model.targetType}>.unaryPlus() {
       list.addAll(this)
+    }
+  }
+
+  /**
+    * ${comment(model.comment)}
+    */
+  fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
+    ${model.name}().apply(dslBlock).build()
+  """
+
+fun mapDSL(model: MapDSLModel) =
+  """
+  package ${model.packageName}
+  
+  ${imports(model.imports)}
+  
+  /**
+    * ${comment(model.comment)}
+    */
+  ${annotations(model.annotations)}
+  class ${model.name} {
+    private val map = mutableMapOf<${model.keyType}, ${model.targetType}>()
+    internal fun build() : Map<${model.keyType}, ${model.targetType}> = map
+
+    /**
+      * Builds an object of type ${model.targetType} from 
+      * the given DSL in 'dslBlock' and adds it to the map at ['key']
+      */
+    fun o(key: ${model.keyType}, dslBlock: ${model.targetDSLType}.() -> Unit) {
+      map[key] = ${model.targetDSLType}().apply(dslBlock).build()
+    }
+
+    /**
+      * Adds a pair of ${model.keyType} -> ${model.targetType} to the map
+      */
+    operator fun Pair<${model.keyType}, ${model.targetType}>.unaryPlus() {
+      map[this.first] = this.second
+    }
+
+    /**
+      * Adds all given Pair<${model.keyType}, ${model.targetType}> instances to the map
+      */
+    operator fun Collection<Pair<${model.keyType}, ${model.targetType}>>.unaryPlus() {
+      this.forEach { map[it.first] = it.second }
+    }
+
+    /**
+      * Adds all given Pair<${model.keyType}, ${model.targetType}> instances to the map
+      */
+    operator fun Array<Pair<${model.keyType}, ${model.targetType}>>.unaryPlus() {
+      this.forEach { map[it.first] = it.second }
+    }
+
+    /**
+      * Adds all entries in the given map
+      */
+    operator fun Map<${model.keyType}, ${model.targetType}>.unaryPlus() {
+      map.putAll(this)
     }
   }
 

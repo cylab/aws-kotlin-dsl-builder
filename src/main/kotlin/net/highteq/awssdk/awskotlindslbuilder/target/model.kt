@@ -8,60 +8,72 @@ package net.highteq.awssdk.awskotlindslbuilder.target
 class DSLModel(
   val dslMarker: DSLMarkerModel,
   val collectionDSLs: List<CollectionDSLModel>,
+  val mapDSLs: List<MapDSLModel>,
   val typeDLSs: List<TypeDSLModel>
 )
 
-class DSLMarkerModel(
+sealed class DSLFileModel(
   val packageName: String,
   val name: String
 ) {
   val qualified get() = "$packageName.$name"
 }
 
+class DSLMarkerModel(packageName: String, name: String) : DSLFileModel(packageName, name)
+
 class CollectionDSLModel(
-  val packageName: String,
+  packageName: String,
+  name: String,
   val imports: Set<String>,
   val comment: String,
   val annotations: Set<String>,
-  val name: String,
   val dslEntrypoint: String,
   val targetType: String,
   val targetDSLType: String
-) {
-  val qualified get() = "$packageName.$name"
-}
+) : DSLFileModel(packageName, name)
 
-class TypeDSLModel(
-  val packageName: String,
+class MapDSLModel(
+  packageName: String,
+  name: String,
   val imports: Set<String>,
   val comment: String,
   val annotations: Set<String>,
-  val name: String,
+  val dslEntrypoint: String,
+  val keyType: String,
+  val targetType: String,
+  val targetDSLType: String
+) : DSLFileModel(packageName, name)
+
+class TypeDSLModel(
+  packageName: String,
+  name: String,
+  val imports: Set<String>,
+  val comment: String,
+  val annotations: Set<String>,
   val dslEntrypoint: String,
   val targetType: String,
   val dslProperties: List<DSLPropertyModel>,
   val dslFunctions: List<DSLFunctionModel>,
   val subDSLs: List<SubDSLModel>
-) {
-  val qualified get() = "$packageName.$name"
+) : DSLFileModel(packageName, name) {
   fun hasDslBlock() = dslProperties.isNotEmpty() || dslFunctions.isNotEmpty() || subDSLs.isNotEmpty()
 }
 
 class DSLPropertyModel(
-  val comment: String,
   val name: String,
+  val comment: String,
   val targetType: String
 )
 
 class DSLFunctionModel(
-  val comment: String,
   val name: String,
+  val comment: String,
   val targetType: String
 )
 
 class SubDSLModel(
-  val comment: String,
   val name: String,
+  val comment: String,
   val targetType: String,
   val targetDSLType: String,
   val targetDSLEntrypoint: String

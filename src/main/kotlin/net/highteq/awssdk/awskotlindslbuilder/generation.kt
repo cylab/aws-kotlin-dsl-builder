@@ -12,54 +12,50 @@ import net.highteq.awssdk.awskotlindslbuilder.xmldoc.parseAs
 import java.io.File
 
 fun generateDSL(xmlDoc: File, sourcePackage: String, targetPackage: String, outputDir: File) {
-  outputDir.mkdirs()
   val docs = parseAs<Docs>(xmlDoc)
   val sourceModel = scanSource(sourcePackage, docs)
   val targetModel = transform(sourceModel, sourcePackage, targetPackage)
-  generate(targetModel, outputDir)
-}
 
-private fun generate(model: DSLModel, outputDir: File){
   logger.info("Generating to ${outputDir.absolutePath}")
+  outputDir.deleteRecursively()
+  outputDir.mkdirs()
+  generateKotlin(::dslMarker, targetModel.dslMarker, outputDir )
+  generateKotlin(::collectionDSL, targetModel.collectionDSLs, outputDir)
+  generateKotlin(::mapDSL, targetModel.mapDSLs, outputDir)
+  generateKotlin(::typeDSL, targetModel.typeDLSs, outputDir)
+}
 
-  ktFile(outputDir, model.dslMarker.packageName, model.dslMarker.name).apply {
+private fun <T : DSLFileModel> generateKotlin(generator: (T) -> String, dsls: Collection<T>, parentDir: File) {
+  dsls.sortedBy{ it.name }.forEach { dsl -> generateKotlin(generator, dsl, parentDir) }
+}
+
+private fun <T : DSLFileModel> generateKotlin(generator: (T) -> String, dsl: T, parentDir: File) {
+  File(File(parentDir, dsl.packageName.replace('.', '/')), "${dsl.name}.kt").apply {
     parentFile.mkdirs()
-    logger.info("Generating ${name}")
-    writeText(header().trimIndent()+"\n")
-    appendText(dslMarker(model.dslMarker).trimIndent())
-  }
-  model.typeDLSs.forEach { typeDSLModel ->
-    ktFile(outputDir, typeDSLModel.packageName, typeDSLModel.name).apply {
-      parentFile.mkdirs()
-      logger.info("Generating ${name}")
-      writeText(header().trimIndent()+"\n")
-      appendText(typeDSL(typeDSLModel).trimIndent())
-    }
-  }
-  model.collectionDSLs.forEach { collectionDSL ->
-    ktFile(outputDir, collectionDSL.packageName, collectionDSL.name).apply {
-      parentFile.mkdirs()
-      logger.info("Generating ${name}")
-      writeText(header().trimIndent()+"\n")
-      appendText(collectionDSL(collectionDSL).trimIndent())
-    }
+    logger.info("Generating $name")
+    writeText(header().trimIndent() + "\n")
+    appendText(generator(dsl).trimIndent())
   }
 }
 
-private fun ktFile(parentDir: File, packageName: String, name: String) = File(File(parentDir, packageName.replace('.', '/')), "$name.kt")
+internal fun dslProperties(dslProperties: List<DSLPropertyModel>) =
+  dslProperties
+    .sortedBy{ it.name }
+    .map { dslProperty(it).prependIndent("  ") }.joinToString("\n")
 
-internal fun dslProperties(dslProperties: List<DSLPropertyModel>) = dslProperties
-  .map { dslProperty(it).prependIndent("  ") }.joinToString("\n")
+internal fun subDSLs(subDSLs: List<SubDSLModel>) =
+  subDSLs
+    .sortedBy{ it.name }
+    .map { subDSL(it).prependIndent("  ") }.joinToString("\n")
 
-internal fun subDSLs(subDSLs: List<SubDSLModel>) = subDSLs
-  .map { subDSL(it).prependIndent("  ") }.joinToString("\n")
-
-internal fun dslFunctions(dslFunctions: List<DSLFunctionModel>) = dslFunctions
-  .map { dslFunction(it).prependIndent("  ") }.joinToString("\n")
+internal fun dslFunctions(dslFunctions: List<DSLFunctionModel>) =
+  dslFunctions
+    .sortedBy{ it.name }
+    .map { dslFunction(it).prependIndent("  ") }.joinToString("\n")
 
 internal fun imports(set: Set<String>) = "import " +
   set
-    .map {it.replace('$', '.')}
+    .map { it.replace('$', '.') }
     .sorted()
     .joinToString("\n  import ")
 

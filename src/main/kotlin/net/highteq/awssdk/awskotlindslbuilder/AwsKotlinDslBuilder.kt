@@ -26,7 +26,7 @@ class AwsKotlinDslBuilder : CommandLineRunner {
       File(projectDir, "data/dynamodb.xml"),
       "software.amazon.awssdk.services.dynamodb",
       "net.highteq.cylab.awssdk.dynamodb.kotlin.dsl",
-      File(projectDir.parent, "dsls/awssdk-dynamodb-kotlin-dsl/src/main/kotlin")
+      File(projectDir.parent, "dsls/awssdk-dynamodb-kotlin-dsl/src/generated/kotlin")
     )
   }
 }
