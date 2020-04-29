@@ -11,6 +11,7 @@ import net.highteq.awssdk.awskotlindslbuilder.source.SourceModel
 import net.highteq.awssdk.awskotlindslbuilder.source.TypeDeclaration
 import java.lang.reflect.Type
 import java.lang.reflect.ParameterizedType
+import java.lang.reflect.TypeVariable
 import java.lang.reflect.WildcardType
 import java.util.function.Consumer
 
@@ -28,19 +29,6 @@ fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: St
           else -> substring(0, it - 1).toLowerCase() + substring(it - 1)
         }
       }
-
-  fun Type.simpleTypeName(): String = when (this) {
-    is Class<*> -> if (this.isPrimitive) this.simpleName.capitalize() else this.simpleName
-    is ParameterizedType -> this.rawType.typeName.substringAfterLast('.') +
-      "<" + this.actualTypeArguments.map { it.simpleTypeName() }.joinToString(", ") + ">"
-    // TODO: find out, what really needs to be done for a WildcardType
-    is WildcardType -> when {
-      this.lowerBounds.isNotEmpty() -> this.lowerBounds[0].simpleTypeName()
-      this.upperBounds.isNotEmpty() -> this.upperBounds[0].simpleTypeName()
-      else -> "Any"
-    }
-    else -> "Should not happen: " + this.javaClass
-  }.replace(Regex("^Integer$"), "Int")
 
   fun Type.nullableMarker(): String = when (this) {
     is Class<*> -> if (this.isPrimitive) "" else "?"
@@ -101,7 +89,16 @@ fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: St
     .map { builder ->
       val groups = builder.methodGroups.values.map { MethodGroupFacade(it) }
 
-      val properties = groups.map { it.primaryProperty }
+      val functions = groups.mapNotNull { it.simpleFunction }
+        .filter { sourceModel.superType.isAssignableFrom(it.method.returnType) }
+      val dslFunctions = functions.map {
+        DSLFunctionModel(
+          name = it.name,
+          comment = toMarkdown(it.doc?.comment ?: "")
+        )
+      }
+
+      val properties = groups.mapNotNull { it.primaryProperty }
       val dslProperties = properties.map {
         val type = it.method.genericParameterTypes[0]
         DSLPropertyModel(
@@ -111,10 +108,10 @@ fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: St
         )
       }
 
-      val functions = groups.mapNotNull { it.secondaryFunction }
-      val dslFunctions = functions.map {
+      val secondaries = groups.mapNotNull { it.secondaryOverload }
+      val dslSecondaries = secondaries.map {
         val type = it.method.genericParameterTypes[0]
-        DSLFunctionModel(
+        DSLPropertyModel(
           name = it.name,
           comment = toMarkdown(it.doc?.comment ?: ""),
           targetType = type.simpleTypeName() + type.nullableMarker()
@@ -122,7 +119,7 @@ fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: St
       }
 
       val subBuilders = groups
-        .map { it.primaryProperty }
+        .mapNotNull { it.primaryProperty }
         .map { it to sourceModel.builders[it.method.parameterTypes[0]] }
         .filterNot { it.second == null }
         .map { (method, targetBuilder) -> method to targetBuilder!!.target }
@@ -179,7 +176,7 @@ fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: St
 
       val dependencies = listOf(
         properties,
-        functions,
+        secondaries,
         subBuilders.map { it.first },
         subMapBuilders.map { it.first },
         subCollectionBuilders.map { it.first })
@@ -201,6 +198,7 @@ fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: St
         dslEntrypoint = "build${builder.target.name}",
         targetType = builder.target.name,
         dslProperties = dslProperties,
+        dslSecondaries = dslSecondaries,
         dslFunctions = dslFunctions,
         subDSLs = listOf(subDSLs, subMapDSLs, subCollectionDSLs).flatten()
       )
@@ -228,7 +226,7 @@ fun findMapDSLTypes(sourceModel: SourceModel) =
 
 private fun findMethodWithParameterizedTypeParameter(sourceModel: SourceModel, paramType: Class<*>) =
   sourceModel.methods.index.values.asSequence()
-    .filter { paramType.isAssignableFrom(it.method.parameterTypes[0]) }
+    .filter { it. method.parameterCount == 1 && paramType.isAssignableFrom(it.method.parameterTypes[0]) }
     .map { model -> model to model.method.genericParameterTypes[0] }
     .filter { (_, param) -> param is ParameterizedType }
     .map { (model, param) -> model to (param as ParameterizedType) }
@@ -238,36 +236,26 @@ class MethodGroupFacade(
   val model: MethodGroupModel
 ) {
 
-  val primaryProperty: MethodModel
+  val simpleFunction: MethodModel?
     get() {
-      val primitive = findPrimitive()
-      if (primitive != null && !hasOverloads) {
-        return primitive
-      }
-      val typed = findTyped()
-      if (typed != null) {
-        return typed
-      }
-      val collection = findCollection()
-      if (collection != null) {
-        return collection
-      }
-      val array = findArray()
-      if (array != null) {
-        return array
-      }
-      val lambda = findLambda()
-      if (lambda != null) {
-        return lambda
-      }
-      return model.methods[0]
+      findNoParam()?.let { return it }
+      return null
     }
 
-  val secondaryFunction: MethodModel?
+  val primaryProperty: MethodModel?
     get() {
-      val primitive = findPrimitive()
-      if (primitive != null && hasOverloads) {
-        return primitive
+      findTyped()?.let { return it }
+      findCollection()?.let { return it }
+      findArray()?.let { return it }
+      findPrimitive()?.let { return it }
+      findLambda()?.let { return it }
+      return null
+    }
+
+  val secondaryOverload: MethodModel?
+    get() {
+      findPrimitive()?.let {
+        if(hasOverloads) return it
       }
       return null
     }
@@ -275,34 +263,45 @@ class MethodGroupFacade(
   val hasOverloads: Boolean
     get() = model.methods.size > 1
 
-  fun findPrimitive() = model.methods.firstOrNull {
-    val type = it.method.parameterTypes[0]
-    type.isPrimitive || type.getPackage()?.name == "java.lang"
-  }
+  fun findPrimitive() =
+    model.methods.firstOrNull {
+      it.method.parameterCount == 1 && countsAsPrimitive(it.method.parameterTypes[0])
+    }
 
-  fun findTyped() = model.methods.firstOrNull {
-    val type = it.method.parameterTypes[0]
-    !(type.isPrimitive || type.getPackage()?.name == "java.lang" ||
-      type.isArray ||
-      Collection::class.java.isAssignableFrom(type) ||
-      Consumer::class.java.isAssignableFrom(type))
-  }
+  fun findTyped() =
+    model.methods.firstOrNull {
+      it.method.parameterCount == 1 && !it.method.parameterTypes[0].run {
+        countsAsPrimitive(this) || isArray
+          || Collection::class.java.isAssignableFrom(this)
+          || Consumer::class.java.isAssignableFrom(this)
+      }
+    }
 
-  fun findCollection() = model.methods.firstOrNull {
-    Collection::class.java.isAssignableFrom(it.method.parameterTypes[0])
-  }
+  fun findCollection() =
+    model.methods.firstOrNull {
+      it.method.parameterCount == 1
+        && Collection::class.java.isAssignableFrom(it.method.parameterTypes[0])
+    }
 
-  fun findMaps() = model.methods.firstOrNull {
-    java.util.Map::class.java.isAssignableFrom(it.method.parameterTypes[0])
-  }
+  fun findMaps() =
+    model.methods.firstOrNull {
+      it.method.parameterCount == 1
+        && java.util.Map::class.java.isAssignableFrom(it.method.parameterTypes[0])
+    }
 
-  fun findArray() = model.methods.firstOrNull {
-    it.method.parameterTypes[0].isArray
-  }
+  fun findArray() =
+    model.methods.firstOrNull {
+      it.method.parameterCount == 1 && it.method.parameterTypes[0].isArray
+    }
 
-  fun findLambda() = model.methods.firstOrNull {
-    Consumer::class.java.isAssignableFrom(it.method.parameterTypes[0])
-  }
+  fun findLambda() =
+    model.methods.firstOrNull {
+      it.method.parameterCount == 1
+        && Consumer::class.java.isAssignableFrom(it.method.parameterTypes[0])
+    }
+
+  fun findNoParam() = model.methods.firstOrNull { it.method.parameterCount == 0 }
+  fun countsAsPrimitive( type: Class<*>) = type.isPrimitive || type.`package`?.name == "java.lang"
 }
 
 fun isStandardImport(import: String) = listOf("java.util", "java.lang")
@@ -313,3 +312,19 @@ fun toMarkdown(text: String) = text
   .replace(Regex("<[^>]+>"), "")
   .replace(Regex("^(\\s*[\r\n])+",RegexOption.MULTILINE), "\n")
   .trim()
+
+fun Type.simpleTypeName(): String = when (this) {
+  is Class<*> -> if (this.isPrimitive) this.simpleName.capitalize() else targetTypeMapping[this]?:this.simpleName
+  is ParameterizedType -> this.rawType.typeName.substringAfterLast('.') +
+    "<" + this.actualTypeArguments.map { it.simpleTypeName() }.joinToString(", ") + ">"
+  // TODO: find out, what really needs to be done for a WildcardType
+  is WildcardType -> when {
+    this.lowerBounds.isNotEmpty() -> this.lowerBounds[0].simpleTypeName()
+    this.upperBounds.isNotEmpty() -> this.upperBounds[0].simpleTypeName()
+    else -> "Any"
+  }
+  // TODO: find out, how to really handle TypeVariables...
+  is TypeVariable<*> -> this.genericDeclaration.toString().substringAfter(" ").substringAfterLast(".")+"<*>"
+  else -> "Should not happen: " + this.javaClass
+}.replace(Regex("^Integer$"), "Int")
+

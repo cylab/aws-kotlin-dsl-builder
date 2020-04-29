@@ -154,6 +154,7 @@ fun typeDSL(model: TypeDSLModel) =
     val builder = ${model.targetType}.builder()
     internal fun build(): ${model.targetType} = builder.build()
     ${dslProperties(model.dslProperties)}
+    ${dslSecondaries(model.dslSecondaries)}
     ${dslFunctions(model.dslFunctions)}
     ${subDSLs(model.subDSLs)}
   }
@@ -180,13 +181,24 @@ fun dslProperty(model: DSLPropertyModel) =
   """
 
 
-fun dslFunction(model: DSLFunctionModel) =
+fun dslSecondary(model: DSLPropertyModel) =
   """
   /**
     * ${comment(model.comment)}
     */
   fun ${model.name}(value: ${model.targetType}) {
     builder.${model.name}(value)
+  }
+  """
+
+
+fun dslFunction(model: DSLFunctionModel) =
+  """
+  /**
+    * ${comment(model.comment)}
+    */
+  fun ${model.name}() {
+    builder.${model.name}()
   }
   """
 

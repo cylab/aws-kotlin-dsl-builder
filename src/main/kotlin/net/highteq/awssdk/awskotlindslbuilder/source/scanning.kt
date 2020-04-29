@@ -6,6 +6,7 @@
 package net.highteq.awssdk.awskotlindslbuilder.source
 
 import net.highteq.awssdk.awskotlindslbuilder.pairOrNull
+import net.highteq.awssdk.awskotlindslbuilder.target.simpleTypeName
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.Docs
 import org.springframework.beans.factory.support.AbstractBeanDefinition
 import org.springframework.beans.factory.support.SimpleBeanDefinitionRegistry
@@ -16,8 +17,9 @@ import org.springframework.util.ReflectionUtils
 import software.amazon.awssdk.utils.builder.SdkBuilder
 
 
-fun scanSource(sourcePackage: String, docs: Docs?) = SourceModel(
-  findResolvableSubtypesOf(SdkBuilder::class.java, sourcePackage)
+fun scanSource(sourcePackage: String, docs: Docs?): SourceModel {
+  val superType = SdkBuilder::class.java
+  val subTypeMap = findResolvableSubtypesOf(superType, sourcePackage)
     .mapNotNull { pairOrNull(it.getGeneric(0).resolve(), it.getGeneric(1).resolve()) }
     .map { (builderClass, targetClass) ->
       targetClass to BuilderModel(
@@ -33,23 +35,26 @@ fun scanSource(sourcePackage: String, docs: Docs?) = SourceModel(
           type = targetClass,
           doc = docs?.types?.get(targetClass)
         ),
-        methodGroups = findMethodGroups(builderClass, docs)
+        methodGroups = findMethodGroups(superType, builderClass, docs)
       )
     }
     .toMap()
-)
+  return SourceModel(superType, subTypeMap)
+}
 
-private fun findMethodGroups(type: Class<*>, docs: Docs?) =
+private fun findMethodGroups(superType: Class<*>, type: Class<*>, docs: Docs?) =
   ReflectionUtils
     .getAllDeclaredMethods(type)
-    .filter { it.parameterCount == 1 }
     .filterNot {
       it.name in listOf(
         "applyMutation",
-        "httpClientBuilder"
+        "copy" // todo -> better fix for that!
       )
     }
-//    .filter { it.returnType.name == type.name && it.parameterCount == 1 }
+    .filter {
+      // TODO: real check for generic type buidlers or at least accept a list of possible builder names
+      superType.isAssignableFrom(it.returnType) || it.returnType.name.endsWith("Builder")
+    }
     .map {
       MethodModel(
         name = it.name,

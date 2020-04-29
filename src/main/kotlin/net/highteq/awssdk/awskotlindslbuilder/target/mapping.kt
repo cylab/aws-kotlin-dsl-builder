@@ -1,7 +1,9 @@
 package net.highteq.awssdk.awskotlindslbuilder.target
 
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue
-import java.lang.reflect.Type
+val targetTypeMapping : Map<Class<*>, String> = mapOf(
+  software.amazon.awssdk.http.SdkHttpClient.Builder::class.java to "Builder<*>",
+  software.amazon.awssdk.http.async.SdkAsyncHttpClient.Builder::class.java to "Builder<*>"
+)
 
 val extraTargetTypeDSLMapping : Map<Any, String> = mapOf(
   "java.util.Map<java.lang.String, software.amazon.awssdk.services.dynamodb.model.AttributeValue>"

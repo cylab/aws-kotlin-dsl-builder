@@ -48,6 +48,11 @@ internal fun subDSLs(subDSLs: List<SubDSLModel>) =
     .sortedBy{ it.name }
     .map { subDSL(it).prependIndent("  ") }.joinToString("\n")
 
+internal fun dslSecondaries(dslSecondaries: List<DSLPropertyModel>) =
+  dslSecondaries
+    .sortedBy{ it.name }
+    .map { dslSecondary(it).prependIndent("  ") }.joinToString("\n")
+
 internal fun dslFunctions(dslFunctions: List<DSLFunctionModel>) =
   dslFunctions
     .sortedBy{ it.name }

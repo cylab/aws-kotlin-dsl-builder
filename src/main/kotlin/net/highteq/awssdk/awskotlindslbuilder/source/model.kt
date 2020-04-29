@@ -17,6 +17,7 @@ import java.lang.reflect.WildcardType
 typealias BuilderMap = Map<Class<*>, BuilderModel>
 
 data class SourceModel(
+  val superType: Class<*>,
   val builders: BuilderMap
 ) {
   val methods: Index<MethodModel> = Index(
