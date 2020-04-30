@@ -23,7 +23,7 @@ class AwsKotlinDslBuilder : CommandLineRunner {
   override fun run(vararg args: String?) {
     val projectDir = findProjectDir()
     generateDSL(
-      File(projectDir, "data/dynamodb.xml"),
+      File(projectDir, "build/sdkDocs/dynamodb.xml"),
       "software.amazon.awssdk.services.dynamodb",
       "net.highteq.cylab.awssdk.dynamodb.kotlin.dsl",
       File(projectDir.parent, "dsls/awssdk-dynamodb-kotlin-dsl/src/generated/kotlin")

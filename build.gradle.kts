@@ -29,6 +29,47 @@ tasks.withType<KotlinCompile> {
 	}
 }
 
+val sdkSources by configurations.creating { isTransitive = false }
+val xmldoclet by configurations.creating
+
+val downloadSDKSources = tasks.register<Copy>("downloadSDKSources") {
+	sdkSources.resolvedConfiguration.resolvedArtifacts.forEach {
+		into(File(buildDir, "sdkSources"))
+		from(zipTree(it.file.absolutePath)) {
+			into(it.name)
+		}
+	}
+}
+
+val generateSDKDocs = tasks.create("generateSDKDocs") {
+	dependsOn(downloadSDKSources)
+}
+afterEvaluate {
+	sdkSources.resolvedConfiguration.resolvedArtifacts
+		.map {
+			tasks.register<Javadoc>("sdkDoc-${it.name}") {
+				title = "" // to prevent "invalid flag: -doctitle" with the doclet
+				source = fileTree(File(buildDir, "sdkSources/${it.name}")) {
+					include("**/*.java")
+				}
+				classpath = sourceSets["main"].compileClasspath
+				setDestinationDir(File("${buildDir}/sdkDocs"))
+				with(options as StandardJavadocDocletOptions) {
+					doclet = "com.github.markusbernhardt.xmldoclet.XmlDoclet"
+					docletpath = xmldoclet.files.toList()
+					addStringOption("filename", "${it.name}.xml")
+					addStringOption("subpackages", "software")
+					noTimestamp(false) // to prevent "invalid flag: -notimestamp" with the doclet
+				}
+			}
+		}
+		.forEach { generateSDKDocs.dependsOn(it) }
+}
+
+tasks.named<Task>("processResources") {
+	dependsOn(generateSDKDocs)
+}
+
 repositories {
 	mavenCentral()
 	maven { url = uri("https://repo.spring.io/milestone") }
@@ -48,10 +89,17 @@ dependencies {
 	implementation("io.github.microutils:kotlin-logging:1.7.9")
 	implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.10.3")
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.+")
+
 	implementation("software.amazon.awssdk:dynamodb")
 	implementation("software.amazon.awssdk:utils")
+
+	sdkSources("software.amazon.awssdk", "dynamodb", classifier = "sources")
+
 	testImplementation("org.springframework.boot:spring-boot-starter-test") {
 		exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
 	}
+
+	xmldoclet("com.github.markusbernhardt:xml-doclet:1.0.5")
+	xmldoclet("org.slf4j:slf4j-simple:1.7.30")
 }
 
