@@ -6,7 +6,6 @@
 package net.highteq.awssdk.awskotlindslbuilder.source
 
 import net.highteq.awssdk.awskotlindslbuilder.pairOrNull
-import net.highteq.awssdk.awskotlindslbuilder.target.simpleTypeName
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.Docs
 import org.springframework.beans.factory.support.AbstractBeanDefinition
 import org.springframework.beans.factory.support.SimpleBeanDefinitionRegistry
@@ -14,17 +13,15 @@ import org.springframework.context.annotation.ClassPathBeanDefinitionScanner
 import org.springframework.core.ResolvableType
 import org.springframework.core.type.filter.AssignableTypeFilter
 import org.springframework.util.ReflectionUtils
-import software.amazon.awssdk.utils.builder.SdkBuilder
 
 
-fun scanSource(sourcePackage: String, docs: Docs?): SourceModel {
-  val superType = SdkBuilder::class.java
+fun scanSource(superType: Class<*>, sourcePackage: String, docs: Docs?): SourceModel {
   val subTypeMap = findResolvableSubtypesOf(superType, sourcePackage)
     .mapNotNull { pairOrNull(it.getGeneric(0).resolve(), it.getGeneric(1).resolve()) }
     .map { (builderClass, targetClass) ->
       targetClass to BuilderModel(
         builder = TypeDeclaration(
-          name = builderClass.simpleName,
+          name = builderClass.name.substringAfterLast('.').replace('$','.'),
           qualified = builderClass.name,
           type = builderClass,
           doc = docs?.types?.get(builderClass)
@@ -53,12 +50,13 @@ private fun findMethodGroups(superType: Class<*>, type: Class<*>, docs: Docs?) =
     }
     .filter {
       // TODO: real check for generic type buidlers or at least accept a list of possible builder names
-      superType.isAssignableFrom(it.returnType) || it.returnType.name.endsWith("Builder")
+      superType.isAssignableFrom(it.returnType)
+        || it.returnType.name.endsWith("Builder")
     }
     .map {
       MethodModel(
         name = it.name,
-        qualified = "${type.name.replace('$','.')}.${it.name}",
+        qualified = "${type.name}.${it.name}",
         method = it,
         doc = docs?.methods?.get(it)
       )
@@ -76,12 +74,12 @@ private fun findMethodGroups(superType: Class<*>, type: Class<*>, docs: Docs?) =
 private fun findResolvableSubtypesOf(type: Class<*>, sourcePackage: String) =
   SimpleBeanDefinitionRegistry()
     .run {
-      ClassPathBeanDefinitionScanner(this).apply {
+      val scanner = ClassPathBeanDefinitionScanner(this).apply {
         setIncludeAnnotationConfig(false)
         addIncludeFilter(AssignableTypeFilter(type))
-        scan(sourcePackage)
       }
-      beanDefinitionNames.map { this.getBeanDefinition(it) }
+      scanner.scan(sourcePackage)
+      beanDefinitionNames.map { getBeanDefinition(it) }
     }
     .filterIsInstance<AbstractBeanDefinition>()
     .map {

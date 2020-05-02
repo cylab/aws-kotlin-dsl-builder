@@ -53,11 +53,11 @@ afterEvaluate {
 					include("**/*.java")
 				}
 				classpath = sourceSets["main"].compileClasspath
-				setDestinationDir(File("${buildDir}/sdkDocs"))
+				setDestinationDir(File("${buildDir}/sdkDocs/${it.name}"))
 				with(options as StandardJavadocDocletOptions) {
 					doclet = "com.github.markusbernhardt.xmldoclet.XmlDoclet"
 					docletpath = xmldoclet.files.toList()
-					addStringOption("filename", "${it.name}.xml")
+					addStringOption("filename", "docs.xml")
 					addStringOption("subpackages", "software")
 					noTimestamp(false) // to prevent "invalid flag: -notimestamp" with the doclet
 				}
@@ -90,10 +90,13 @@ dependencies {
 	implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.10.3")
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.+")
 
-	implementation("software.amazon.awssdk:dynamodb")
 	implementation("software.amazon.awssdk:utils")
+	implementation("software.amazon.awssdk:dynamodb")
+	implementation("software.amazon.awssdk:s3")
 
 	sdkSources("software.amazon.awssdk", "dynamodb", classifier = "sources")
+	sdkSources("software.amazon.awssdk", "http-client-spi", classifier = "sources")
+	sdkSources("software.amazon.awssdk", "s3", classifier = "sources")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test") {
 		exclude(group = "org.junit.vintage", module = "junit-vintage-engine")

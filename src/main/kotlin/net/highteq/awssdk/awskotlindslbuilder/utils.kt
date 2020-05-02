@@ -10,7 +10,7 @@ import java.lang.reflect.Method
 class Index<T>(
   val index: Map<String, T>
 ) {
-  operator fun get(key: String) = index[key.replace('$', '.')]
+  operator fun get(key: String) = index[key]
   operator fun get(type: Class<*>) = this[type.name]
   operator fun get(method: Method) = this[methodKey(method)]
 }

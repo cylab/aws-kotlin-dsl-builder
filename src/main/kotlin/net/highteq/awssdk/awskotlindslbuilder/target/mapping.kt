@@ -1,8 +1,8 @@
 package net.highteq.awssdk.awskotlindslbuilder.target
 
 val targetTypeMapping : Map<Class<*>, String> = mapOf(
-  software.amazon.awssdk.http.SdkHttpClient.Builder::class.java to "Builder<*>",
-  software.amazon.awssdk.http.async.SdkAsyncHttpClient.Builder::class.java to "Builder<*>"
+  software.amazon.awssdk.http.SdkHttpClient.Builder::class.java to "SdkHttpClient.Builder<*>",
+  software.amazon.awssdk.http.async.SdkAsyncHttpClient.Builder::class.java to "SdkAsyncHttpClient.Builder<*>"
 )
 
 val extraTargetTypeDSLMapping : Map<Any, String> = mapOf(

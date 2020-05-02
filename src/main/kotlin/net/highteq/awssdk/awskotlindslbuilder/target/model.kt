@@ -29,7 +29,8 @@ class CollectionDSLModel(
   val annotations: Set<String>,
   val dslEntrypoint: String,
   val targetType: String,
-  val targetDSLType: String
+  val targetDSLType: String,
+  val targetDSLEntrypoint: String
 ) : DSLFileModel(packageName, name)
 
 class MapDSLModel(
@@ -41,7 +42,8 @@ class MapDSLModel(
   val dslEntrypoint: String,
   val keyType: String,
   val targetType: String,
-  val targetDSLType: String
+  val targetDSLType: String,
+  val targetDSLEntrypoint: String
 ) : DSLFileModel(packageName, name)
 
 class TypeDSLModel(
@@ -51,6 +53,7 @@ class TypeDSLModel(
   val comment: String,
   val annotations: Set<String>,
   val dslEntrypoint: String,
+  val builderType: String,
   val targetType: String,
   val dslProperties: List<DSLPropertyModel>,
   val dslSecondaries: List<DSLPropertyModel>,

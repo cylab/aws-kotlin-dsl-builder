@@ -11,9 +11,9 @@ import net.highteq.awssdk.awskotlindslbuilder.xmldoc.Docs
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.parseAs
 import java.io.File
 
-fun generateDSL(xmlDoc: File, sourcePackage: String, targetPackage: String, outputDir: File) {
+fun generateDSL(superType: Class<*>, sourcePackage: String, targetPackage: String, xmlDoc: File, outputDir: File) {
   val docs = parseAs<Docs>(xmlDoc)
-  val sourceModel = scanSource(sourcePackage, docs)
+  val sourceModel = scanSource(superType, sourcePackage, docs)
   val targetModel = transform(sourceModel, sourcePackage, targetPackage)
 
   logger.info("Generating to ${outputDir.absolutePath}")
@@ -60,7 +60,6 @@ internal fun dslFunctions(dslFunctions: List<DSLFunctionModel>) =
 
 internal fun imports(set: Set<String>) = "import " +
   set
-    .map { it.replace('$', '.') }
     .sorted()
     .joinToString("\n  import ")
 
