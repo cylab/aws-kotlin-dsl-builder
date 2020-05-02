@@ -7,27 +7,26 @@ package net.highteq.awssdk.awskotlindslbuilder.target
 
 import net.highteq.awssdk.awskotlindslbuilder.*
 
-fun header() =
-  """
+fun header() = """
   /*
     This file was generated from https://github.com/aws/aws-sdk-java-v2 by https://github.com/cylab/aws-kotlin-dsl-builder
     Like the original code, this file and project is licensed under
     Apache License Version 2.0
     See LICENSE.txt for more info
   */
-  """
+  
+"""
 
-fun dslMarker(model: DSLMarkerModel) =
-  """
+fun dslMarker(model: DSLMarkerModel) = """
   package ${model.packageName}
 
   @DslMarker
   annotation class ${model.name}
-  """
+
+"""
 
 
-fun collectionDSL(model: CollectionDSLModel) =
-  """
+fun collectionDSL(model: CollectionDSLModel) = """
   @file:Suppress("DEPRECATION", "NOTHING_TO_INLINE")
   package ${model.packageName}
   
@@ -81,10 +80,10 @@ fun collectionDSL(model: CollectionDSLModel) =
     */
   inline fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
     ${model.name}(mutableListOf<${model.targetType}>()).apply(dslBlock).build()
-  """
 
-fun mapDSL(model: MapDSLModel) =
-  """
+"""
+
+fun mapDSL(model: MapDSLModel) = """
   @file:Suppress("DEPRECATION", "NOTHING_TO_INLINE")
   package ${model.packageName}
   
@@ -145,11 +144,11 @@ fun mapDSL(model: MapDSLModel) =
     */
   inline fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
     ${model.name}(mutableMapOf<${model.keyType}, ${model.targetType}>()).apply(dslBlock).build()
-  """
+
+"""
 
 
-fun typeDSL(model: TypeDSLModel) =
-  """
+fun typeDSL(model: TypeDSLModel) = """
   @file:Suppress("DEPRECATION", "NOTHING_TO_INLINE")
   package ${model.packageName}
   
@@ -178,11 +177,11 @@ fun typeDSL(model: TypeDSLModel) =
     */
   inline fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
     ${model.name}(${model.targetType}.builder()).apply(dslBlock).build()
-  """
+
+"""
 
 
-fun dslProperty(model: DSLPropertyModel) =
-  """
+fun dslProperty(model: DSLPropertyModel) = """
   /**
     * ${comment(model.comment)}
     */
@@ -192,37 +191,38 @@ fun dslProperty(model: DSLPropertyModel) =
     set(value) {
       builder.${model.name}(value)
     }
-  """
+
+"""
 
 
-fun dslSecondary(model: DSLPropertyModel) =
-  """
+fun dslSecondary(model: DSLPropertyModel) = """
   /**
     * ${comment(model.comment)}
     */
   inline fun ${model.name}(value: ${model.targetType}) {
     builder.${model.name}(value)
   }
-  """
+  
+"""
 
 
-fun dslFunction(model: DSLFunctionModel) =
-  """
+fun dslFunction(model: DSLFunctionModel) = """
   /**
     * ${comment(model.comment)}
     */
   inline fun ${model.name}() {
     builder.${model.name}()
   }
-  """
+
+"""
 
 
-fun subDSL(model: SubDSLModel) =
-  """
+fun subDSL(model: SubDSLModel) = """
   /**
     * ${comment(model.comment)}
     */
   inline fun ${model.name}(dslBlock: ${model.targetDSLType}.() -> Unit) {
     builder.${model.name}(${model.targetDSLEntrypoint}(dslBlock))
   }
-  """
+
+"""

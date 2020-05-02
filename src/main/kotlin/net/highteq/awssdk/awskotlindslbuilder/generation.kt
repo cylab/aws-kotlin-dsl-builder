@@ -10,6 +10,7 @@ import net.highteq.awssdk.awskotlindslbuilder.target.*
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.Docs
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.parseAs
 import java.io.File
+import kotlin.text.RegexOption.MULTILINE
 
 fun generateDSL(superType: Class<*>, sourcePackage: String, targetPackage: String, xmlDoc: File, outputDir: File) {
   val docs = parseAs<Docs>(xmlDoc)
@@ -33,8 +34,8 @@ private fun <T : DSLFileModel> generateKotlin(generator: (T) -> String, dsl: T, 
   File(File(parentDir, dsl.packageName.replace('.', '/')), "${dsl.name}.kt").apply {
     parentFile.mkdirs()
     logger.info("Generating $name")
-    writeText(header().trimIndent() + "\n")
-    appendText(generator(dsl).trimIndent())
+    writeText(header().trimIndent().trimLines() + "\n")
+    appendText(generator(dsl).trimIndent().consolidateLines().trimLines())
   }
 }
 
@@ -66,3 +67,5 @@ internal fun imports(set: Set<String>) = "import " +
 internal fun comment(text: String) = text.lines().joinToString("\n    * ")
 internal fun annotations(set: Set<String>) = "@" + set.sorted().joinToString("\n  @")
 
+private fun String.trimLines() = this.trim(' ', '\t', '\r', '\n')
+private fun String.consolidateLines() = this.replace(Regex("^(\\s*\\r?\\n)+", MULTILINE), "\n")
