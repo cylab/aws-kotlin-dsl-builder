@@ -5,7 +5,9 @@
  */
 package net.highteq.awssdk.awskotlindslbuilder
 
+import org.apache.commons.lang3.reflect.TypeUtils
 import java.lang.reflect.Method
+import java.lang.reflect.Type
 
 class Index<T>(
   private val index: Map<String, T>
@@ -30,3 +32,5 @@ fun <F, S, T> tripleOrNull(first: F?, second: S?, third: T) =
 fun methodKey(method: Method) =
   "${method.declaringClass.name}.${method.name}" +
     "(${method.genericParameterTypes.map { it.typeName }.joinToString(", ")})"
+
+val Type.rawClass: Class<*> get() = TypeUtils.getRawType(this, null) ?: Object::class.java

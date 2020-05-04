@@ -90,6 +90,7 @@ dependencies {
 	implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.10.3")
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.10.+")
 	implementation("org.reflections:reflections:0.9.12")
+	implementation("org.apache.commons:commons-lang3:3.10")
 
 	implementation("software.amazon.awssdk:utils")
 	implementation("software.amazon.awssdk:dynamodb")
