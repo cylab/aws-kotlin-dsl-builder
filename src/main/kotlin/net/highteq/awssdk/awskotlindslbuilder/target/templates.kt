@@ -178,6 +178,8 @@ fun typeDSL(model: TypeDSLModel) = """
   inline fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
     ${model.name}(${model.targetType}.builder()).apply(dslBlock).build()
 
+  ${extDSLs(model.extDSLs)}
+
 """
 
 
@@ -224,5 +226,15 @@ fun subDSL(model: SubDSLModel) = """
   inline fun ${model.name}(dslBlock: ${model.targetDSLType}.() -> Unit) {
     builder.${model.name}(${model.targetDSLEntrypoint}(dslBlock))
   }
+
+"""
+
+
+fun extDSL(model: ExtDSLModel) = """
+  /**
+    * ${comment(model.comment)}
+    */
+  inline fun ${model.receiverType}.${model.name}By(dslBlock: ${model.targetDSLType}.() -> Unit) =
+    this.${model.name}(${model.targetDSLEntrypoint}(dslBlock))
 
 """

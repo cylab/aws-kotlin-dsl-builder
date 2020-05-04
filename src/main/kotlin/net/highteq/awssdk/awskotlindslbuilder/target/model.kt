@@ -58,7 +58,8 @@ class TypeDSLModel(
   val dslProperties: List<DSLPropertyModel>,
   val dslSecondaries: List<DSLPropertyModel>,
   val dslFunctions: List<DSLFunctionModel>,
-  val subDSLs: List<SubDSLModel>
+  val subDSLs: List<SubDSLModel>,
+  val extDSLs: List<ExtDSLModel>
 ) : DSLFileModel(packageName, name) {
   fun hasDslBlock() = dslProperties.isNotEmpty() || dslSecondaries.isNotEmpty() || subDSLs.isNotEmpty()
 }
@@ -77,6 +78,15 @@ class DSLFunctionModel(
 class SubDSLModel(
   val name: String,
   val comment: String,
+  val targetType: String,
+  val targetDSLType: String,
+  val targetDSLEntrypoint: String
+)
+
+class ExtDSLModel(
+  val name: String,
+  val comment: String,
+  val receiverType: String,
   val targetType: String,
   val targetDSLType: String,
   val targetDSLEntrypoint: String

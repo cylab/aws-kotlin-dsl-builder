@@ -16,7 +16,7 @@ fun generateDSL(superType: Class<*>, sourcePackage: String, targetPackage: Strin
   val docs = parseAs<Docs>(xmlDoc)
   val sourceModel = scanSource(superType, sourcePackage, docs)
   val targetModel = transform(sourceModel, sourcePackage, targetPackage)
-
+  if(true) return
   logger.info("Generating to ${outputDir.absolutePath}")
   outputDir.deleteRecursively()
   outputDir.mkdirs()
@@ -63,6 +63,11 @@ internal fun imports(set: Set<String>) = "import " +
   set
     .sorted()
     .joinToString("\n  import ")
+
+internal fun extDSLs(extDSLs: List<ExtDSLModel>) =
+  extDSLs
+    .sortedBy{ "${it.receiverType}ZZZZZZ${it.name}" }
+    .map { extDSL(it).prependIndent("  ") }.joinToString("\n")
 
 internal fun comment(text: String) = text.lines().joinToString("\n    * ")
 internal fun annotations(set: Set<String>) = "@" + set.sorted().joinToString("\n  @")

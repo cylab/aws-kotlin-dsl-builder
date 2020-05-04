@@ -6,7 +6,6 @@
 package net.highteq.awssdk.awskotlindslbuilder.source
 
 import net.highteq.awssdk.awskotlindslbuilder.Index
-import net.highteq.awssdk.awskotlindslbuilder.methodKey
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.MethodElement
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.TypeDeclarationElement
 import java.lang.reflect.Method
@@ -18,21 +17,14 @@ typealias BuilderMap = Map<Class<*>, BuilderModel>
 
 data class SourceModel(
   val superType: Class<*>,
-  val builders: BuilderMap
-) {
-  val methods: Index<MethodModel> = Index(
-    builders.values
-      .flatMap { it.methodGroups.values }
-      .flatMap { it.methods }
-      .map { methodKey(it.method) to it }
-      .toMap()
-  )
-}
+  val builders: BuilderMap,
+  val methodIndex: Index<MethodGroupModel>
+)
 
 data class TypeDeclaration(
   val name: String,
   val qualified: String,
-  val type: Class<*>,
+  val type: Type,
   val doc: TypeDeclarationElement?
 )
 
@@ -47,13 +39,16 @@ data class BuilderModel(
 typealias MethodList = List<MethodModel>
 
 data class MethodGroupModel(
+  val owner: TypeDeclaration,
   val name: String,
   val qualified: String,
   val methods: MethodList
 )
 
 data class MethodModel(
+  val owner: TypeDeclaration,
   val name: String,
+  val returnType: Class<*>,
   val qualified: String,
   val method: Method,
   val doc: MethodElement?

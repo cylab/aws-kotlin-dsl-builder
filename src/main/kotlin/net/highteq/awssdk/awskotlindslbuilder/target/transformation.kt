@@ -5,6 +5,7 @@
  */
 package net.highteq.awssdk.awskotlindslbuilder.target
 
+import net.highteq.awssdk.awskotlindslbuilder.pairOrNull
 import net.highteq.awssdk.awskotlindslbuilder.source.*
 import java.lang.reflect.Type
 import java.lang.reflect.ParameterizedType
@@ -85,6 +86,18 @@ private fun transformBuildableType(builder: BuilderModel, sourceModel: SourceMod
   val subDSLs = transformMethodsWithBuildableType(methodGroups, sourceModel)
   val subCollectionDSLs = tranformMethodsWithBuildableCollection(methodGroups, sourceModel)
   val subMapDSLs = transformMethodsWithBuildableMap(methodGroups, sourceModel)
+
+  val extMethodGroups = emptyList<MethodGroupFacade>()
+  val extDSLs = emptyList<ExtDSLModel>()
+//  val extMethodGroups = sourceModel.methodIndex.values
+//    .filterNot {
+//      sourceModel.superType.isAssignableFrom(it.owner.type.rawClass)
+//        || it.name.contains('$')
+//    }
+//    .map { MethodGroupFacade(it) }
+//    .filter { it.findMethodWithParamType(builder.target.type.rawClass) != null }
+//  val extDSLs = transformExtMethodsWithBuildableType(extMethodGroups, sourceModel, builder)
+
   val dependencies = listOf(
     dslMarker.qualified,
     builder.builder.qualified,
@@ -94,6 +107,11 @@ private fun transformBuildableType(builder: BuilderModel, sourceModel: SourceMod
       .filterNotNull()
       .flatMap { it.dependencies }
       .map { it.name }
+      .filterNot { isStandardImport(it) }
+      .toTypedArray(),
+    *extMethodGroups
+      .map { it.model.owner }
+      .map { it.qualified }
       .filterNot { isStandardImport(it) }
       .toTypedArray()
   )
@@ -110,7 +128,8 @@ private fun transformBuildableType(builder: BuilderModel, sourceModel: SourceMod
     dslProperties = dslProperties,
     dslSecondaries = dslSecondaries,
     dslFunctions = dslFunctions,
-    subDSLs = listOf(subDSLs, subMapDSLs, subCollectionDSLs).flatten()
+    subDSLs = listOf(subDSLs, subMapDSLs, subCollectionDSLs).flatten(),
+    extDSLs = extDSLs
   )
 }
 
@@ -171,7 +190,7 @@ private fun transformMethodsWithBuildableType(methodGroups: List<MethodGroupFaca
 
 private fun tranformMethodsWithBuildableCollection(methodGroups: List<MethodGroupFacade>, sourceModel: SourceModel): List<SubDSLModel> {
   return methodGroups
-    .mapNotNull { it.findMethodsWithCollectionParam() }
+    .mapNotNull { it.findMethodWithCollectionParam() }
     .map { it to it.method.genericParameterTypes[0] }
     .filter { it.second is ParameterizedType }
     .map { (method, type) -> method to (type as ParameterizedType).actualTypeArguments[0] }
@@ -192,7 +211,7 @@ private fun tranformMethodsWithBuildableCollection(methodGroups: List<MethodGrou
 
 private fun transformMethodsWithBuildableMap(methodGroups: List<MethodGroupFacade>, sourceModel: SourceModel): List<SubDSLModel> {
   return methodGroups
-    .mapNotNull { it.findMethodsWithMapParam() }
+    .mapNotNull { it.findMethodWithMapParam() }
     .map { it to it.method.genericParameterTypes[0] }
     .filter { it.second is ParameterizedType }
     .map { (method, type) -> method to (type as ParameterizedType).actualTypeArguments[1] }
@@ -207,6 +226,22 @@ private fun transformMethodsWithBuildableMap(methodGroups: List<MethodGroupFacad
         targetType = target.name,
         targetDSLType = "${target.name}MapDSL",
         targetDSLEntrypoint = "build${target.name}Map"
+      )
+    }
+}
+
+private fun transformExtMethodsWithBuildableType(methodGroups: List<MethodGroupFacade>, sourceModel: SourceModel, builder: BuilderModel): List<ExtDSLModel> {
+  return methodGroups
+    .mapNotNull { it.findMethodWithParamType(builder.target.type.rawClass) }
+    .filter { it.owner.qualified.contains(".DynamoDbClient") }
+    .map { prop ->
+      ExtDSLModel(
+        name = prop.name,
+        comment = toMarkdown(prop.doc?.comment ?: ""),
+        receiverType = prop.owner.name,
+        targetType = builder.target.name,
+        targetDSLType = "${builder.target.name}DSL",
+        targetDSLEntrypoint = "build${builder.target.name}"
       )
     }
 }
@@ -227,8 +262,10 @@ private fun findMapDSLTypes(sourceModel: SourceModel) =
 
 
 private fun findMethodWithParameterizedTypeParameter(sourceModel: SourceModel, paramType: Class<*>) =
-  sourceModel.methods.index.values.asSequence()
-    .filter { it. method.parameterCount == 1 && paramType.isAssignableFrom(it.method.parameterTypes[0]) }
+  sourceModel.methodIndex.values
+    .flatMap { it.methods }
+    .asSequence()
+    .filter { it.method.parameterCount == 1 && paramType.isAssignableFrom(it.method.parameterTypes[0]) }
     .map { model -> model to model.method.genericParameterTypes[0] }
     .filter { (_, param) -> param is ParameterizedType }
     .map { (model, param) -> model to (param as ParameterizedType) }
@@ -242,7 +279,8 @@ private fun toMarkdown(text: String) = text
   .replace(Regex("^(\\s*[\r\n])+",RegexOption.MULTILINE), "\n")
   .trim()
 
-private fun convertPackage(type: Class<*>, sourcePackage: String, targetPackage: String) = targetPackage + type.`package`.name.substringAfter(sourcePackage)
+private fun convertPackage(type: Type, sourcePackage: String, targetPackage: String) =
+  targetPackage + (type as Class<*>).`package`.name.substringAfter(sourcePackage)
 
 private fun Type.nullableMarker(): String = when (this) {
   is Class<*> -> if (this.isPrimitive) "" else "?"
@@ -298,23 +336,23 @@ private class MethodGroupFacade(
 
   val simpleFunction: MethodModel?
     get() {
-      findMethodsWithNoParam()?.let { return it }
+      findMethodWithNoParam()?.let { return it }
       return null
     }
 
   val primaryProperty: MethodModel?
     get() {
-      findMethodsWithTypedParam()?.let { return it }
-      findMethodsWithCollectionParam()?.let { return it }
-      findMethodsWithArrayParam()?.let { return it }
-      findMethodsWithPrimitiveParam()?.let { return it }
-      findMethodsWithLambdaParam()?.let { return it }
+      findMethodWithTypedParam()?.let { return it }
+      findMethodWithCollectionParam()?.let { return it }
+      findMethodWithArrayParam()?.let { return it }
+      findMethodWithPrimitiveParam()?.let { return it }
+      findMethodWithLambdaParam()?.let { return it }
       return null
     }
 
   val secondaryOverload: MethodModel?
     get() {
-      findMethodsWithPrimitiveParam()?.let {
+      findMethodWithPrimitiveParam()?.let {
         if(hasOverloads) return it
       }
       return null
@@ -323,12 +361,17 @@ private class MethodGroupFacade(
   val hasOverloads: Boolean
     get() = model.methods.size > 1
 
-  fun findMethodsWithPrimitiveParam() =
+  fun findMethodWithParamType(type: Class<*>) =
+    model.methods.firstOrNull {
+      it.method.parameterCount == 1 && it.method.parameterTypes[0].equals(type)
+    }
+
+  fun findMethodWithPrimitiveParam() =
     model.methods.firstOrNull {
       it.method.parameterCount == 1 && countsAsPrimitive(it.method.parameterTypes[0])
     }
 
-  fun findMethodsWithTypedParam() =
+  fun findMethodWithTypedParam() =
     model.methods.firstOrNull {
       it.method.parameterCount == 1 && it.method.parameterTypes[0].run {
         !countsAsPrimitive(this) && !isArray
@@ -337,30 +380,30 @@ private class MethodGroupFacade(
       }
     }
 
-  fun findMethodsWithCollectionParam() =
+  fun findMethodWithCollectionParam() =
     model.methods.firstOrNull {
       it.method.parameterCount == 1
         && Collection::class.java.isAssignableFrom(it.method.parameterTypes[0])
     }
 
-  fun findMethodsWithMapParam() =
+  fun findMethodWithMapParam() =
     model.methods.firstOrNull {
       it.method.parameterCount == 1
         && java.util.Map::class.java.isAssignableFrom(it.method.parameterTypes[0])
     }
 
-  fun findMethodsWithArrayParam() =
+  fun findMethodWithArrayParam() =
     model.methods.firstOrNull {
       it.method.parameterCount == 1 && it.method.parameterTypes[0].isArray
     }
 
-  fun findMethodsWithLambdaParam() =
+  fun findMethodWithLambdaParam() =
     model.methods.firstOrNull {
       it.method.parameterCount == 1
         && Consumer::class.java.isAssignableFrom(it.method.parameterTypes[0])
     }
 
-  fun findMethodsWithNoParam() = model.methods.firstOrNull { it.method.parameterCount == 0 }
+  fun findMethodWithNoParam() = model.methods.firstOrNull { it.method.parameterCount == 0 }
   fun countsAsPrimitive( type: Class<*>) = type.isPrimitive || type.`package`?.name == "java.lang"
 }
 
