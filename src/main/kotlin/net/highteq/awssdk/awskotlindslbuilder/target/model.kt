@@ -78,6 +78,7 @@ class DSLFunctionModel(
 class SubDSLModel(
   val name: String,
   val comment: String,
+  val imports: Set<String>,
   val targetType: String,
   val targetDSLType: String,
   val targetDSLEntrypoint: String
@@ -86,6 +87,7 @@ class SubDSLModel(
 class ExtDSLModel(
   val name: String,
   val comment: String,
+  val imports: Set<String>,
   val receiverType: String,
   val targetType: String,
   val targetDSLType: String,

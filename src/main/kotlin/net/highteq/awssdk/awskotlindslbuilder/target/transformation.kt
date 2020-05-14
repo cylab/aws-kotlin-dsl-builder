@@ -5,101 +5,98 @@
  */
 package net.highteq.awssdk.awskotlindslbuilder.target
 
+import net.highteq.awssdk.awskotlindslbuilder.pairOrNull
 import net.highteq.awssdk.awskotlindslbuilder.rawClass
 import net.highteq.awssdk.awskotlindslbuilder.source.BuilderModel
-import net.highteq.awssdk.awskotlindslbuilder.source.MethodGroupModel
 import net.highteq.awssdk.awskotlindslbuilder.source.MethodModel
-import net.highteq.awssdk.awskotlindslbuilder.source.SourceModel
+import net.highteq.awssdk.awskotlindslbuilder.source.MethodModel.ParamContainer.COLLECTION
+import net.highteq.awssdk.awskotlindslbuilder.source.MethodModel.ParamContainer.MAP
+import net.highteq.awssdk.awskotlindslbuilder.source.TypeDeclaration
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 import java.lang.reflect.TypeVariable
 import java.lang.reflect.WildcardType
 import java.util.function.Consumer
 
-fun transform(sourceModel: SourceModel, sourcePackage: String, targetPackage: String): DSLModel {
+fun transform(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String): DSLModel {
 
   val dslMarker = DSLMarkerModel(
     targetPackage,
     "${sourcePackage.substringAfterLast('.').capitalize()}DSL"
   )
 
-  val collectionDSLs = tranformBuildableCollections(sourceModel, sourcePackage, targetPackage, dslMarker)
-  val mapDSLs = transformBuildableMaps(sourceModel, sourcePackage, targetPackage, dslMarker)
-  val typeDSLs = transformBuildableTypes(sourceModel, sourcePackage, targetPackage, dslMarker)
+  val collectionDSLs = tranformBuildableCollections(builders, sourcePackage, targetPackage, dslMarker)
+  val mapDSLs = transformBuildableMaps(builders, sourcePackage, targetPackage, dslMarker)
+  val typeDSLs = transformBuildableTypes(builders, sourcePackage, targetPackage, dslMarker)
 
   return DSLModel(dslMarker, collectionDSLs, mapDSLs, typeDSLs)
 }
 
-private fun tranformBuildableCollections(sourceModel: SourceModel, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<CollectionDSLModel> {
-  return findCollectionDSLTypes(sourceModel)
-    .map { (method, target) ->
+private fun tranformBuildableCollections(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<CollectionDSLModel> {
+  return findCollectionDSLTypes(builders)
+    .map { builder ->
       CollectionDSLModel(
-        packageName = convertPackage(target.type, sourcePackage, targetPackage),
-        name = "${target.name}CollectionDSL",
+        packageName = convertPackage(builder.target.type, sourcePackage, targetPackage),
+        name = "${builder.target.name}CollectionDSL",
         imports = setOf(
           dslMarker.qualified,
-          target.qualified,
-          *method.dependencies.map { it.name }.filterNot { isStandardImport(it) }.toTypedArray()
+          builder.target.qualified
         ),
-        comment = "Builds instances of type ${target.name}:\n" +
-          toMarkdown(target.doc?.comment ?: ""),
+        comment = "Builds a collection of type ${builder.target.name}:\n" +
+          toMarkdown(builder.target.doc?.comment ?: ""),
         annotations = setOf(dslMarker.name),
-        dslEntrypoint = "build${target.name}Collection",
-        targetType = target.name,
-        targetDSLType = "${target.name}DSL",
-        targetDSLEntrypoint = "build${target.name}"
+        dslEntrypoint = "build${builder.target.name}Collection",
+        targetType = builder.target.name,
+        targetDSLType = "${builder.target.name}DSL",
+        targetDSLEntrypoint = "build${builder.target.name}"
       )
     }
 }
 
-private fun transformBuildableMaps(sourceModel: SourceModel, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<MapDSLModel> {
-  return findMapDSLTypes(sourceModel)
-    .map { (method, key, target) ->
+private fun transformBuildableMaps(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<MapDSLModel> {
+  return findMapDSLTypes(builders)
+    .map { (key, builder) ->
       MapDSLModel(
-        packageName = convertPackage(target.type, sourcePackage, targetPackage),
-        name = "${target.name}MapDSL",
+        packageName = convertPackage(builder.target.type, sourcePackage, targetPackage),
+        name = "${builder.target.name}MapDSL",
         imports = setOf(
           dslMarker.qualified,
-          target.qualified,
-          *method.dependencies.map { it.name }.filterNot { isStandardImport(it) }.toTypedArray()
+          builder.target.qualified
         ),
-        comment = "Builds instances of type ${target.name}:\n" +
-          toMarkdown(target.doc?.comment ?: ""),
+        comment = "Builds a maps of type ${builder.target.name}:\n" +
+          toMarkdown(builder.target.doc?.comment ?: ""),
         annotations = setOf(dslMarker.name),
-        dslEntrypoint = "build${target.name}Map",
+        dslEntrypoint = "build${builder.target.name}Map",
         keyType = key.simpleTypeName(),
-        targetType = target.name,
-        targetDSLType = "${target.name}DSL",
-        targetDSLEntrypoint = "build${target.name}"
+        targetType = builder.target.name,
+        targetDSLType = "${builder.target.name}DSL",
+        targetDSLEntrypoint = "build${builder.target.name}"
       )
     }
 }
 
-private fun transformBuildableTypes(sourceModel: SourceModel, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<TypeDSLModel> {
-  return sourceModel.builders.values
-    .map { transformBuildableType(it, sourceModel, sourcePackage, targetPackage, dslMarker) }
+private fun transformBuildableTypes(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<TypeDSLModel> {
+  return builders.values
+    .map { transformBuildableType(it, builders, sourcePackage, targetPackage, dslMarker) }
 }
 
-private fun transformBuildableType(builder: BuilderModel, sourceModel: SourceModel, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): TypeDSLModel {
-  val methodGroups = builder.methodGroups.values.map { MethodGroupFacade(it) }
+private fun transformBuildableType(builder: BuilderModel, builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): TypeDSLModel {
+  val methodGroups = builder.attributes
+    .groupBy { it.method.name }
+    .map { (name, methods) ->
+      MethodGroup(
+        owner = builder.builder,
+        name = name,
+        qualified = methods.first().qualified,
+        methods = methods
+      )
+    }
 
-  val dslFunctions = transformSimpleMethods(methodGroups, sourceModel)
+  val dslFunctions = transformSimpleMethods(methodGroups)
   val dslProperties = transformPropertyMethods(methodGroups)
   val dslSecondaries = transformPropertyMethodOverloads(methodGroups)
-  val subDSLs = transformMethodsWithBuildableType(methodGroups, sourceModel)
-  val subCollectionDSLs = tranformMethodsWithBuildableCollection(methodGroups, sourceModel)
-  val subMapDSLs = transformMethodsWithBuildableMap(methodGroups, sourceModel)
-
-  val extMethodGroups = emptyList<MethodGroupFacade>()
-  val extDSLs = emptyList<ExtDSLModel>()
-//  val extMethodGroups = sourceModel.methodIndex.values
-//    .filterNot {
-//      sourceModel.superType.isAssignableFrom(it.owner.type.rawClass)
-//        || it.name.contains('$')
-//    }
-//    .map { MethodGroupFacade(it) }
-//    .filter { it.findMethodWithParamType(builder.target.type.rawClass) != null }
-//  val extDSLs = transformExtMethodsWithBuildableType(extMethodGroups, sourceModel, builder)
+  val subDSLs = transformMethodsWithBuildableType(builder.attributes, builders)
+  val extDSLs =  transformExtMethodsWithBuildableType(builder.targetUsages, builders)
 
   val dependencies = listOf(
     dslMarker.qualified,
@@ -110,18 +107,21 @@ private fun transformBuildableType(builder: BuilderModel, sourceModel: SourceMod
       .filterNotNull()
       .flatMap { it.dependencies }
       .map { it.name }
-      .filterNot { isStandardImport(it) }
       .toTypedArray(),
-    *extMethodGroups
-      .map { it.model.owner }
-      .map { it.qualified }
-      .filterNot { isStandardImport(it) }
+    *subDSLs
+      .flatMap { it.imports }
+      .toTypedArray(),
+    *extDSLs
+      .flatMap { it.imports }
       .toTypedArray()
   )
   return TypeDSLModel(
     packageName = convertPackage(builder.target.type, sourcePackage, targetPackage),
     name = "${builder.target.name}DSL",
-    imports = dependencies.filterNot { it.contains('$') }.toSet(),
+    imports = dependencies
+      .filterNot { it.contains('$') }
+      .filterNot { isStandardImport(it) }
+      .toSet(),
     comment = "Builds instances of type ${builder.target.name}:\n" +
       toMarkdown(builder.target.doc?.comment ?: ""),
     annotations = setOf(dslMarker.name),
@@ -131,15 +131,14 @@ private fun transformBuildableType(builder: BuilderModel, sourceModel: SourceMod
     dslProperties = dslProperties,
     dslSecondaries = dslSecondaries,
     dslFunctions = dslFunctions,
-    subDSLs = listOf(subDSLs, subMapDSLs, subCollectionDSLs).flatten(),
+    subDSLs = subDSLs,
     extDSLs = extDSLs
   )
 }
 
-private fun transformSimpleMethods(methodGroups: List<MethodGroupFacade>, sourceModel: SourceModel): List<DSLFunctionModel> {
+private fun transformSimpleMethods(methodGroups: List<MethodGroup>): List<DSLFunctionModel> {
   return methodGroups
     .mapNotNull { it.simpleFunction }
-    .filter { sourceModel.superType.isAssignableFrom(it.method.returnType) }
     .map {
       DSLFunctionModel(
         name = it.name,
@@ -148,7 +147,7 @@ private fun transformSimpleMethods(methodGroups: List<MethodGroupFacade>, source
     }
 }
 
-private fun transformPropertyMethods(methodGroups: List<MethodGroupFacade>): List<DSLPropertyModel> {
+private fun transformPropertyMethods(methodGroups: List<MethodGroup>): List<DSLPropertyModel> {
   return methodGroups
     .mapNotNull { it.primaryProperty }
     .map {
@@ -161,7 +160,7 @@ private fun transformPropertyMethods(methodGroups: List<MethodGroupFacade>): Lis
     }
 }
 
-private fun transformPropertyMethodOverloads(methodGroups: List<MethodGroupFacade>): List<DSLPropertyModel> {
+private fun transformPropertyMethodOverloads(methodGroups: List<MethodGroup>): List<DSLPropertyModel> {
   return methodGroups
     .mapNotNull { it.secondaryOverload }
     .map {
@@ -174,104 +173,68 @@ private fun transformPropertyMethodOverloads(methodGroups: List<MethodGroupFacad
     }
 }
 
-private fun transformMethodsWithBuildableType(methodGroups: List<MethodGroupFacade>, sourceModel: SourceModel): List<SubDSLModel> {
-  return methodGroups
-    .mapNotNull { it.primaryProperty }
-    .map { it to sourceModel.builders[it.method.parameterTypes[0]] }
-    .filterNot { it.second == null }
+private fun transformMethodsWithBuildableType(attributes: Collection<MethodModel>, builders: Map<Class<*>, BuilderModel>): List<SubDSLModel> {
+  return attributes
+    .filterNot { it.buildableParamValueClass == null }
+    .mapNotNull { pairOrNull(it, builders[it.buildableParamValueClass!!]) }
     .map { (method, targetBuilder) -> method to targetBuilder!!.target }
     .map { (method, target) ->
+      val name = when(method.buildableParamContainer) {
+        COLLECTION -> "${target.name}Collection"
+        MAP -> "${target.name}Map"
+        else -> target.name
+      }
       SubDSLModel(
         name = method.name,
         comment = toMarkdown(method.doc?.comment ?: ""),
+        imports = setOf(target.qualified),
         targetType = target.name,
-        targetDSLType = "${target.name}DSL",
-        targetDSLEntrypoint = "build${target.name}"
+        targetDSLType = "${name}DSL",
+        targetDSLEntrypoint = "build${name}"
       )
     }
 }
 
-private fun tranformMethodsWithBuildableCollection(methodGroups: List<MethodGroupFacade>, sourceModel: SourceModel): List<SubDSLModel> {
-  return methodGroups
-    .mapNotNull { it.findMethodWithCollectionParam() }
-    .map { it to it.method.genericParameterTypes[0] }
-    .filter { it.second is ParameterizedType }
-    .map { (method, type) -> method to (type as ParameterizedType).actualTypeArguments[0] }
-    .filterNot { it.second == null }
-    .map { (method, type) -> method to sourceModel.builders[type] }
-    .filterNot { it.second == null }
+private fun transformExtMethodsWithBuildableType(methods: Collection<MethodModel>, builders: Map<Class<*>, BuilderModel>): List<ExtDSLModel> {
+  return methods
+    .filterNot { it.isBuilderMethod || it.buildableParamValueClass == null }
+    .mapNotNull { pairOrNull(it, builders[it.buildableParamValueClass!!]) }
     .map { (method, targetBuilder) -> method to targetBuilder!!.target }
     .map { (method, target) ->
-      SubDSLModel(
-        name = method.name,
-        comment = toMarkdown(method.doc?.comment ?: ""),
-        targetType = target.name,
-        targetDSLType = "${target.name}CollectionDSL",
-        targetDSLEntrypoint = "build${target.name}Collection"
-      )
-    }
-}
-
-private fun transformMethodsWithBuildableMap(methodGroups: List<MethodGroupFacade>, sourceModel: SourceModel): List<SubDSLModel> {
-  return methodGroups
-    .mapNotNull { it.findMethodWithMapParam() }
-    .map { it to it.method.genericParameterTypes[0] }
-    .filter { it.second is ParameterizedType }
-    .map { (method, type) -> method to (type as ParameterizedType).actualTypeArguments[1] }
-    .filterNot { it.second == null }
-    .map { (method, type) -> method to sourceModel.builders[type] }
-    .filterNot { it.second == null }
-    .map { (method, targetBuilder) -> method to targetBuilder!!.target }
-    .map { (method, target) ->
-      SubDSLModel(
-        name = method.name,
-        comment = toMarkdown(method.doc?.comment ?: ""),
-        targetType = target.name,
-        targetDSLType = "${target.name}MapDSL",
-        targetDSLEntrypoint = "build${target.name}Map"
-      )
-    }
-}
-
-private fun transformExtMethodsWithBuildableType(methodGroups: List<MethodGroupFacade>, sourceModel: SourceModel, builder: BuilderModel): List<ExtDSLModel> {
-  return methodGroups
-    .mapNotNull { it.findMethodWithParamType(builder.target.type.rawClass) }
-    .filter { it.owner.qualified.contains(".DynamoDbClient") }
-    .map { prop ->
+      val name = when(method.buildableParamContainer) {
+        COLLECTION -> "${target.name}Collection"
+        MAP -> "${target.name}Map"
+        else -> target.name
+      }
       ExtDSLModel(
-        name = prop.name,
-        comment = toMarkdown(prop.doc?.comment ?: ""),
-        receiverType = prop.owner.name,
-        targetType = builder.target.name,
-        targetDSLType = "${builder.target.name}DSL",
-        targetDSLEntrypoint = "build${builder.target.name}"
+        name = method.name,
+        comment = toMarkdown(method.doc?.comment ?: ""),
+        imports = setOf(method.owner.qualified, target.qualified),
+        receiverType = method.owner.name,
+        targetType = target.name,
+        targetDSLType = "${name}DSL",
+        targetDSLEntrypoint = "build${name}"
       )
     }
 }
 
-private fun findCollectionDSLTypes(sourceModel: SourceModel) =
-  findMethodWithParameterizedTypeParameter(sourceModel, Collection::class.java)
-    .map { (model, param) -> model to param.actualTypeArguments[0] }
-    .filter { (_, type) -> type is Class<*> }
-    .mapNotNull { (model, type) -> sourceModel.builders[type]?.let { model to it.target } }
-    .toList()
 
-private fun findMapDSLTypes(sourceModel: SourceModel) =
-  findMethodWithParameterizedTypeParameter(sourceModel, Map::class.java)
-    .map { (model, param) -> Triple(model, param.actualTypeArguments[0], param.actualTypeArguments[1]) }
-    .filter { (_, keyType, targetType) -> keyType is Class<*> && targetType is Class<*> }
-    .mapNotNull { (model, keyType, targetType) -> sourceModel.builders[targetType]?.let { Triple(model, keyType, it.target) } }
-    .toList()
+private fun findCollectionDSLTypes(builders: Map<Class<*>, BuilderModel>) =
+  builders.values
+    .flatMap { it.targetUsages }
+    .filter { it.buildableParamContainer == COLLECTION }
+    .mapNotNull { builders[it.buildableParamValueClass!!] }
 
 
-private fun findMethodWithParameterizedTypeParameter(sourceModel: SourceModel, paramType: Class<*>) =
-  sourceModel.methodIndex.values
-    .flatMap { it.methods }
-    .asSequence()
-    .filter { it.method.parameterCount == 1 && paramType.isAssignableFrom(it.method.parameterTypes[0]) }
-    .map { model -> model to model.method.genericParameterTypes[0] }
-    .filter { (_, param) -> param is ParameterizedType }
-    .map { (model, param) -> model to (param as ParameterizedType) }
+private fun findMapDSLTypes(builders: Map<Class<*>, BuilderModel>) =
+  builders.values
+    .flatMap { it.targetUsages }
+    .filter { it.buildableParamContainer == MAP }
+    .map { it.method.genericParameterTypes[0] as ParameterizedType to it }
+    .mapNotNull { (param, method) ->
+      pairOrNull(param.actualTypeArguments[0].rawClass, builders[method.buildableParamValueClass!!])
+    }
+
 
 private fun isStandardImport(import: String) = listOf("java.util", "java.lang")
   .map { import.startsWith(it) }
@@ -333,8 +296,11 @@ private fun String.startLowerCase() = toCharArray()
     }
   }
 
-private class MethodGroupFacade(
-  val model: MethodGroupModel
+private class MethodGroup(
+  val owner: TypeDeclaration,
+  val name: String,
+  val qualified: String,
+  val methods: List<MethodModel>
 ) {
 
   val simpleFunction: MethodModel?
@@ -362,20 +328,20 @@ private class MethodGroupFacade(
     }
 
   val hasOverloads: Boolean
-    get() = model.methods.size > 1
+    get() = methods.size > 1
 
   fun findMethodWithParamType(type: Class<*>) =
-    model.methods.firstOrNull {
-      it.method.parameterCount == 1 && it.method.parameterTypes[0].equals(type)
+    methods.firstOrNull {
+      it.method.parameterCount == 1 && it.method.parameterTypes[0] == (type)
     }
 
   fun findMethodWithPrimitiveParam() =
-    model.methods.firstOrNull {
+    methods.firstOrNull {
       it.method.parameterCount == 1 && countsAsPrimitive(it.method.parameterTypes[0])
     }
 
   fun findMethodWithTypedParam() =
-    model.methods.firstOrNull {
+    methods.firstOrNull {
       it.method.parameterCount == 1 && it.method.parameterTypes[0].run {
         !countsAsPrimitive(this) && !isArray
           && !Collection::class.java.isAssignableFrom(this)
@@ -384,29 +350,29 @@ private class MethodGroupFacade(
     }
 
   fun findMethodWithCollectionParam() =
-    model.methods.firstOrNull {
+    methods.firstOrNull {
       it.method.parameterCount == 1
         && Collection::class.java.isAssignableFrom(it.method.parameterTypes[0])
     }
 
   fun findMethodWithMapParam() =
-    model.methods.firstOrNull {
+    methods.firstOrNull {
       it.method.parameterCount == 1
         && java.util.Map::class.java.isAssignableFrom(it.method.parameterTypes[0])
     }
 
   fun findMethodWithArrayParam() =
-    model.methods.firstOrNull {
+    methods.firstOrNull {
       it.method.parameterCount == 1 && it.method.parameterTypes[0].isArray
     }
 
   fun findMethodWithLambdaParam() =
-    model.methods.firstOrNull {
+    methods.firstOrNull {
       it.method.parameterCount == 1
         && Consumer::class.java.isAssignableFrom(it.method.parameterTypes[0])
     }
 
-  fun findMethodWithNoParam() = model.methods.firstOrNull { it.method.parameterCount == 0 }
+  fun findMethodWithNoParam() = methods.firstOrNull { it.method.parameterCount == 0 }
   fun countsAsPrimitive( type: Class<*>) = type.isPrimitive || type.`package`?.name == "java.lang"
 }
 

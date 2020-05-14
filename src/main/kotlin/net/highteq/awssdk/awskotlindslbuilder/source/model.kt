@@ -5,21 +5,12 @@
  */
 package net.highteq.awssdk.awskotlindslbuilder.source
 
-import net.highteq.awssdk.awskotlindslbuilder.Index
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.MethodElement
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.TypeDeclarationElement
 import java.lang.reflect.Method
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 import java.lang.reflect.WildcardType
-
-typealias BuilderMap = Map<Class<*>, BuilderModel>
-
-data class SourceModel(
-  val superType: Class<*>,
-  val builders: BuilderMap,
-  val methodIndex: Index<MethodGroupModel>
-)
 
 data class TypeDeclaration(
   val name: String,
@@ -28,21 +19,11 @@ data class TypeDeclaration(
   val doc: TypeDeclarationElement?
 )
 
-typealias MethodGroupMap = Map<String, MethodGroupModel>
-
 data class BuilderModel(
   val builder: TypeDeclaration,
   val target: TypeDeclaration,
-  val methodGroups: MethodGroupMap
-)
-
-typealias MethodList = List<MethodModel>
-
-data class MethodGroupModel(
-  val owner: TypeDeclaration,
-  val name: String,
-  val qualified: String,
-  val methods: MethodList
+  val attributes: Collection<MethodModel>,
+  val targetUsages: Collection<MethodModel>
 )
 
 data class MethodModel(
@@ -51,16 +32,16 @@ data class MethodModel(
   val returnType: Class<*>,
   val qualified: String,
   val method: Method,
-  val doc: MethodElement?
+  val doc: MethodElement?,
+  val isBuilderMethod: Boolean = false,
+  val buildableParamContainer: ParamContainer = ParamContainer.NONE,
+  val buildableParamValueClass: Class<*>? = null
 ) {
-  val dependencies = dependenciesOfMethod(method)
-}
-
-private fun dependenciesOfMethod(method: Method): Set<Class<*>> =
-  mutableSetOf<Class<*>>().apply {
+  enum class ParamContainer { NONE, SCALAR, COLLECTION, MAP }
+  val dependencies = mutableSetOf<Class<*>>().apply {
     method.genericParameterTypes.forEach { add(it) }
   }
-
+}
 
 private fun MutableSet<Class<*>>.add(type: Type) {
   when (type) {

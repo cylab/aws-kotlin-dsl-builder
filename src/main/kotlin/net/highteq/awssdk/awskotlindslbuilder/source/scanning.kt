@@ -5,8 +5,9 @@
  */
 package net.highteq.awssdk.awskotlindslbuilder.source
 
-import net.highteq.awssdk.awskotlindslbuilder.Index
 import net.highteq.awssdk.awskotlindslbuilder.rawClass
+import net.highteq.awssdk.awskotlindslbuilder.source.MethodModel.ParamContainer
+import net.highteq.awssdk.awskotlindslbuilder.source.MethodModel.ParamContainer.*
 import net.highteq.awssdk.awskotlindslbuilder.xmldoc.Docs
 import org.apache.commons.lang3.reflect.TypeUtils.getTypeArguments
 import org.reflections.ReflectionUtils.*
@@ -18,41 +19,75 @@ import org.reflections.util.ConfigurationBuilder
 import org.reflections.util.FilterBuilder
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 
 
-fun scanSource(superType: Class<*>, sourcePackage: String, docs: Docs?): SourceModel {
-  val methodIndex = createMethodIndex(sourcePackage, docs)
+fun scanSource(sourcePackage: String, docs: Docs?) : Map<Class<*>, BuilderModel> {
+  // TODO: shift method groups to transformation
+  val rawMethods = findPublicNonInternalMethods(sourcePackage, docs)
+  val builderMap = findBuildersWithTargets(rawMethods).toMap()
+  val targets = builderMap.values
 
-  val builderTypeMap = findBuildersWithTargets(methodIndex)
+  // add some more metadata to the methods
+  val methods = rawMethods.map {
+    val (paramContainer, valueClass) = resolveBuildableParam(it.method, targets)
+    it.copy(
+      isBuilderMethod = it.returnType in builderMap,
+      buildableParamContainer = paramContainer,
+      buildableParamValueClass = valueClass
+    )
+  }
+
+  return builderMap.entries
     .map { (builderClass, targetClass) ->
-      val builderDeclaration = TypeDeclaration(
+      val builder = TypeDeclaration(
         name = builderClass.name.substringAfterLast('.').replace('$', '.'),
         qualified = builderClass.name,
         type = builderClass,
         doc = docs?.types?.get(builderClass)
       )
-      val targetDeclaration = TypeDeclaration(
+      val target = TypeDeclaration(
         name = targetClass.simpleName,
         qualified = targetClass.name,
         type = targetClass,
         doc = docs?.types?.get(targetClass)
       )
-
-      targetClass to BuilderModel(
-        builder = builderDeclaration,
-        target = targetDeclaration,
-        methodGroups = findBuilderMethods(methodIndex, builderDeclaration)
+      target.type.rawClass to BuilderModel(
+        builder = builder,
+        target = target,
+        attributes = findBuilderAttributes(methods, builder),
+        targetUsages = findTargetUsages(methods, target)
       )
     }
     .toMap()
-
-  return SourceModel(superType, builderTypeMap, methodIndex)
 }
 
-private fun findBuildersWithTargets(methodIndex: Index<MethodGroupModel>): List<Pair<Class<*>, Class<*>>> {
-  return methodIndex.values
-    .flatMap { it.methods }
+private fun resolveBuildableParam(method: Method, targets: Collection<Class<*>>): Pair<ParamContainer, Class<*>?> {
+  if (method.parameterCount != 1)
+    return NONE to null
+
+  val paramType = method.genericParameterTypes[0]
+  val isCollection = Collection::class.java.isAssignableFrom(paramType.rawClass)
+  val isMap = Map::class.java.isAssignableFrom(paramType.rawClass)
+
+  val possibleValueClass = when {
+    paramType is ParameterizedType && isCollection -> paramType.actualTypeArguments[0]
+    paramType is ParameterizedType && isMap -> paramType.actualTypeArguments[1]
+    else -> paramType.rawClass
+  }
+  val valueClass = targets.firstOrNull { it == possibleValueClass }
+  val containerType = when {
+    valueClass == null -> NONE
+    isCollection -> COLLECTION
+    isMap -> MAP
+    else -> SCALAR
+  }
+  return containerType to valueClass
+}
+
+private fun findBuildersWithTargets(methods: List<MethodModel>): List<Pair<Class<*>, Class<*>>> {
+  return methods
     .filter { it.name == "build" && it.method.parameterCount == 0 }
     .map { it.owner.type.rawClass to it.returnType }
     .filter { (_, targetClass) ->
@@ -64,33 +99,33 @@ private fun findBuildersWithTargets(methodIndex: Index<MethodGroupModel>): List<
     }
 }
 
-private fun findBuilderMethods(methodIndex: Index<MethodGroupModel>, builderDeclaration: TypeDeclaration): Map<String, MethodGroupModel> {
-  return methodIndex.values
-    .filter { it.owner.type == builderDeclaration.type }
-    .filterNot { it.name in listOf("applyMutation", "copy") }
-    .map { it.name to it }
-    .toMap()
+private fun findBuilderAttributes(methods: Collection<MethodModel>, builderDeclaration: TypeDeclaration): List<MethodModel> {
+  return methods
+    // TODO: resolve method return type against builder type (resolved, if it is a parameterized type)
+    // TODO: owner-type hierarchy resolven
+    .filter { it.owner.type == builderDeclaration.type && it.returnType.isAssignableFrom(builderDeclaration.type.rawClass)}
+    .filterNot { it.name in listOf("applyMutation", "copy", "build", "sdkFields") }
 }
 
-private fun createMethodIndex(sourcePackage: String, docs: Docs?): Index<MethodGroupModel> {
-  return Index(
-    findPublicNonInternalTypes(sourcePackage)
-      .map { type ->
-        val typeDeclaration = TypeDeclaration(
-          name = type.rawClass.name.substringAfterLast('.').replace('$', '.'),
-          qualified = type.rawClass.name,
-          type = type,
-          doc = docs?.types?.get(type.rawClass)
-        )
-        findMethodGroups(typeDeclaration, docs)
-      }
-      .flatMap { it.values }
-      .map { it.qualified to it }
-      .toMap()
-  )
+private fun findTargetUsages(methods: Collection<MethodModel>, target: TypeDeclaration): List<MethodModel> {
+  return methods
+    .filter { it.buildableParamValueClass == target.type }
 }
 
-private fun findMethodGroups(declaration: TypeDeclaration, docs: Docs?) =
+private fun findPublicNonInternalMethods(sourcePackage: String, docs: Docs?): List<MethodModel> {
+  return findPublicNonInternalTypes(sourcePackage)
+    .flatMap { type ->
+      val typeDeclaration = TypeDeclaration(
+        name = type.rawClass.name.substringAfterLast('.').replace('$', '.'),
+        qualified = type.rawClass.name,
+        type = type,
+        doc = docs?.types?.get(type.rawClass)
+      )
+      findMethodsOfType(typeDeclaration, docs)
+    }
+}
+
+private fun findMethodsOfType(declaration: TypeDeclaration, docs: Docs?) =
   getAllMethods(declaration.type.rawClass, withModifier(Modifier.PUBLIC))
     .filterNot { it.name.contains('$') }
     .groupBy { methodCallSignature(it) }
@@ -103,15 +138,6 @@ private fun findMethodGroups(declaration: TypeDeclaration, docs: Docs?) =
         qualified = "${declaration.name}.${method.name}",
         method = method,
         doc = docs?.methods?.get(method)
-      )
-    }
-    .groupBy { it.method.name }
-    .mapValues { (name, methods) ->
-      MethodGroupModel(
-        owner = declaration,
-        name = name,
-        qualified = methods.first().qualified,
-        methods = methods
       )
     }
 

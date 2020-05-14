@@ -14,8 +14,8 @@ import kotlin.text.RegexOption.MULTILINE
 
 fun generateDSL(superType: Class<*>, sourcePackage: String, targetPackage: String, xmlDoc: File, outputDir: File) {
   val docs = parseAs<Docs>(xmlDoc)
-  val sourceModel = scanSource(superType, sourcePackage, docs)
-  val targetModel = transform(sourceModel, sourcePackage, targetPackage)
+  val builders = scanSource(sourcePackage, docs)
+  val targetModel = transform(builders, sourcePackage, targetPackage)
 
   logger.info("Generating to ${outputDir.absolutePath}")
   outputDir.deleteRecursively()
@@ -67,7 +67,7 @@ internal fun imports(set: Set<String>) = "import " +
 internal fun extDSLs(extDSLs: List<ExtDSLModel>) =
   extDSLs
     .sortedBy{ "${it.receiverType}ZZZZZZ${it.name}" }
-    .map { extDSL(it).prependIndent("  ") }.joinToString("\n")
+    .map { extDSL(it).prependIndent("") }.joinToString("\n")
 
 internal fun comment(text: String) = text.lines().joinToString("\n    * ")
 internal fun annotations(set: Set<String>) = "@" + set.sorted().joinToString("\n  @")
