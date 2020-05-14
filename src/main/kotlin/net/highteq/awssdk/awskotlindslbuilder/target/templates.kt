@@ -5,8 +5,6 @@
  */
 package net.highteq.awssdk.awskotlindslbuilder.target
 
-import net.highteq.awssdk.awskotlindslbuilder.*
-
 fun header() = """
   /*
     This file was generated from https://github.com/aws/aws-sdk-java-v2 by https://github.com/cylab/aws-kotlin-dsl-builder
@@ -183,6 +181,9 @@ fun typeDSL(model: TypeDSLModel) = """
 """
 
 
+fun dslProperties(dslProperties: List<DSLPropertyModel>) = dslProperties.sortedBy{ it.name }
+  .map { dslProperty(it).prependIndent("  ") }.joinToString("\n")
+
 fun dslProperty(model: DSLPropertyModel) = """
   /**
     * ${comment(model.comment)}
@@ -197,6 +198,9 @@ fun dslProperty(model: DSLPropertyModel) = """
 """
 
 
+fun dslSecondaries(dslSecondaries: List<DSLPropertyModel>) = dslSecondaries.sortedBy{ it.name }
+  .map { dslSecondary(it).prependIndent("  ") }.joinToString("\n")
+
 fun dslSecondary(model: DSLPropertyModel) = """
   /**
     * ${comment(model.comment)}
@@ -207,6 +211,9 @@ fun dslSecondary(model: DSLPropertyModel) = """
   
 """
 
+
+fun dslFunctions(dslFunctions: List<DSLFunctionModel>) = dslFunctions.sortedBy{ it.name }
+  .map { dslFunction(it).prependIndent("  ") }.joinToString("\n")
 
 fun dslFunction(model: DSLFunctionModel) = """
   /**
@@ -219,6 +226,9 @@ fun dslFunction(model: DSLFunctionModel) = """
 """
 
 
+fun subDSLs(subDSLs: List<SubDSLModel>) = subDSLs.sortedBy{ it.name }
+  .map { subDSL(it).prependIndent("  ") }.joinToString("\n")
+
 fun subDSL(model: SubDSLModel) = """
   /**
     * ${comment(model.comment)}
@@ -230,6 +240,9 @@ fun subDSL(model: SubDSLModel) = """
 """
 
 
+fun extDSLs(extDSLs: List<ExtDSLModel>) = extDSLs.sortedBy{ "${it.receiverType}ZZZZZZ${it.name}" }
+    .map { extDSL(it).prependIndent("") }.joinToString("\n")
+
 fun extDSL(model: ExtDSLModel) = """
   /**
     * ${comment(model.comment)}
@@ -238,3 +251,10 @@ fun extDSL(model: ExtDSLModel) = """
     this.${model.name}(${model.targetDSLEntrypoint}(dslBlock))
 
 """
+
+
+fun imports(set: Set<String>) = "import " + set.sorted().joinToString("\n  import ")
+
+fun comment(text: String) = text.lines().joinToString("\n    * ")
+
+fun annotations(set: Set<String>) = "@" + set.sorted().joinToString("\n  @")
