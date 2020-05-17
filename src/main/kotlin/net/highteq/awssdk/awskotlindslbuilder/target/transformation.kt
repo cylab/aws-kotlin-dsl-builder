@@ -20,67 +20,63 @@ import java.util.function.Consumer
 
 fun transform(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String): DSLModel {
 
-  val dslMarker = DSLMarkerModel(
+  val dslScope = DSLScopeModel(
     targetPackage,
     "${sourcePackage.substringAfterLast('.').capitalize()}DSL"
   )
 
-  val collectionDSLs = tranformBuildableCollections(builders, sourcePackage, targetPackage, dslMarker)
-  val mapDSLs = transformBuildableMaps(builders, sourcePackage, targetPackage, dslMarker)
-  val typeDSLs = transformBuildableTypes(builders, sourcePackage, targetPackage, dslMarker)
+  val collectionDSLs = tranformBuildableCollections(builders, sourcePackage, targetPackage, dslScope)
+  val mapDSLs = transformBuildableMaps(builders, sourcePackage, targetPackage, dslScope)
+  val typeDSLs = transformBuildableTypes(builders, sourcePackage, targetPackage, dslScope)
 
-  return DSLModel(dslMarker, collectionDSLs, mapDSLs, typeDSLs)
+  return DSLModel(dslScope, collectionDSLs, mapDSLs, typeDSLs)
 }
 
-private fun tranformBuildableCollections(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<CollectionDSLModel> {
+private fun tranformBuildableCollections(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslScope: DSLScopeModel): List<CollectionDSLModel> {
   return findCollectionDSLTypes(builders)
     .map { builder ->
       CollectionDSLModel(
         packageName = convertPackage(builder.target.type, sourcePackage, targetPackage),
         name = "${builder.target.name}CollectionDSL",
-        imports = setOf(
-          dslMarker.qualified,
-          builder.target.qualified
-        ),
+        scope = dslScope,
+        imports = dslScope.declarations + builder.target.qualified,
         comment = "Builds a collection of type ${builder.target.name}:\n" +
           toMarkdown(builder.target.doc?.comment ?: ""),
-        annotations = setOf(dslMarker.name),
-        dslEntrypoint = "build${builder.target.name}Collection",
+        annotations = setOf(dslScope.marker),
+        dslEntrypoint = "${builder.target.name.startLowerCase()}Collection",
         targetType = builder.target.name,
         targetDSLType = "${builder.target.name}DSL",
-        targetDSLEntrypoint = "build${builder.target.name}"
+        targetDSLEntrypoint = "${dslScope.name}.${builder.target.name.startLowerCase()}"
       )
     }
 }
 
-private fun transformBuildableMaps(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<MapDSLModel> {
+private fun transformBuildableMaps(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslScope: DSLScopeModel): List<MapDSLModel> {
   return findMapDSLTypes(builders)
     .map { (key, builder) ->
       MapDSLModel(
+        scope = dslScope,
         packageName = convertPackage(builder.target.type, sourcePackage, targetPackage),
         name = "${builder.target.name}MapDSL",
-        imports = setOf(
-          dslMarker.qualified,
-          builder.target.qualified
-        ),
+        imports = dslScope.declarations + builder.target.qualified,
         comment = "Builds a maps of type ${builder.target.name}:\n" +
           toMarkdown(builder.target.doc?.comment ?: ""),
-        annotations = setOf(dslMarker.name),
-        dslEntrypoint = "build${builder.target.name}Map",
+        annotations = setOf(dslScope.marker),
+        dslEntrypoint = "${builder.target.name.startLowerCase()}Map",
         keyType = key.simpleTypeName(),
         targetType = builder.target.name,
         targetDSLType = "${builder.target.name}DSL",
-        targetDSLEntrypoint = "build${builder.target.name}"
+        targetDSLEntrypoint = "${dslScope.name}.${builder.target.name.startLowerCase()}"
       )
     }
 }
 
-private fun transformBuildableTypes(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): List<TypeDSLModel> {
+private fun transformBuildableTypes(builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslScope: DSLScopeModel): List<TypeDSLModel> {
   return builders.values
-    .map { transformBuildableType(it, builders, sourcePackage, targetPackage, dslMarker) }
+    .map { transformBuildableType(it, builders, sourcePackage, targetPackage, dslScope) }
 }
 
-private fun transformBuildableType(builder: BuilderModel, builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslMarker: DSLMarkerModel): TypeDSLModel {
+private fun transformBuildableType(builder: BuilderModel, builders: Map<Class<*>, BuilderModel>, sourcePackage: String, targetPackage: String, dslScope: DSLScopeModel): TypeDSLModel {
   val methodGroups = builder.attributes
     .groupBy { it.method.name }
     .map { (name, methods) ->
@@ -95,37 +91,37 @@ private fun transformBuildableType(builder: BuilderModel, builders: Map<Class<*>
   val dslFunctions = transformSimpleMethods(methodGroups)
   val dslProperties = transformPropertyMethods(methodGroups)
   val dslSecondaries = transformPropertyMethodOverloads(methodGroups)
-  val subDSLs = transformMethodsWithBuildableType(builder.attributes, builders)
-  val extDSLs =  transformExtMethodsWithBuildableType(builder.targetUsages, builders)
+  val subDSLs = transformMethodsWithBuildableType(builder.attributes, builders, dslScope)
+  val extDSLs =  transformExtMethodsWithBuildableType(builder.targetUsages, builders, dslScope)
 
-  val dependencies = listOf(
-    dslMarker.qualified,
-    builder.builder.qualified,
-    builder.target.qualified,
-    *methodGroups
+  val dependencies = dslScope.declarations +
+    builder.builder.qualified +
+    builder.target.qualified +
+    methodGroups
       .flatMap { listOf(it.primaryProperty, it.secondaryOverload) }
       .filterNotNull()
       .flatMap { it.dependencies }
       .map { it.name }
-      .toTypedArray(),
-    *subDSLs
+      .toSet() +
+    subDSLs
       .flatMap { it.imports }
-      .toTypedArray(),
-    *extDSLs
+      .toSet() +
+    extDSLs
       .flatMap { it.imports }
-      .toTypedArray()
-  )
+      .toSet()
+
   return TypeDSLModel(
     packageName = convertPackage(builder.target.type, sourcePackage, targetPackage),
     name = "${builder.target.name}DSL",
+    scope = dslScope,
     imports = dependencies
       .filterNot { it.contains('$') }
       .filterNot { isStandardImport(it) }
       .toSet(),
     comment = "Builds instances of type ${builder.target.name}:\n" +
       toMarkdown(builder.target.doc?.comment ?: ""),
-    annotations = setOf(dslMarker.name),
-    dslEntrypoint = "build${builder.target.name}",
+    annotations = setOf(dslScope.marker),
+    dslEntrypoint = builder.target.name.startLowerCase(),
     builderType = builder.builder.name,
     targetType = builder.target.name,
     dslProperties = dslProperties,
@@ -173,7 +169,7 @@ private fun transformPropertyMethodOverloads(methodGroups: List<MethodGroup>): L
     }
 }
 
-private fun transformMethodsWithBuildableType(attributes: Collection<MethodModel>, builders: Map<Class<*>, BuilderModel>): List<SubDSLModel> {
+private fun transformMethodsWithBuildableType(attributes: Collection<MethodModel>, builders: Map<Class<*>, BuilderModel>, dslScope: DSLScopeModel): List<SubDSLModel> {
   return attributes
     .filterNot { it.buildableParamValueClass == null }
     .mapNotNull { pairOrNull(it, builders[it.buildableParamValueClass!!]) }
@@ -190,12 +186,12 @@ private fun transformMethodsWithBuildableType(attributes: Collection<MethodModel
         imports = setOf(target.qualified),
         targetType = target.name,
         targetDSLType = "${name}DSL",
-        targetDSLEntrypoint = "build${name}"
+        targetDSLEntrypoint = "${dslScope.name}.Companion.${name.startLowerCase()}"
       )
     }
 }
 
-private fun transformExtMethodsWithBuildableType(methods: Collection<MethodModel>, builders: Map<Class<*>, BuilderModel>): List<ExtDSLModel> {
+private fun transformExtMethodsWithBuildableType(methods: Collection<MethodModel>, builders: Map<Class<*>, BuilderModel>, dslScope: DSLScopeModel): List<ExtDSLModel> {
   return methods
     .filterNot { it.isBuilderMethod || it.buildableParamValueClass == null }
     .mapNotNull { pairOrNull(it, builders[it.buildableParamValueClass!!]) }
@@ -213,7 +209,7 @@ private fun transformExtMethodsWithBuildableType(methods: Collection<MethodModel
         receiverType = method.owner.name,
         targetType = target.name,
         targetDSLType = "${name}DSL",
-        targetDSLEntrypoint = "build${name}"
+        targetDSLEntrypoint = "${dslScope.name}.Companion.${name.startLowerCase()}"
       )
     }
 }

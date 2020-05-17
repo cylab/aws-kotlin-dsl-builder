@@ -6,7 +6,7 @@
 package net.highteq.awssdk.awskotlindslbuilder.target
 
 class DSLModel(
-  val dslMarker: DSLMarkerModel,
+  val dslScope: DSLScopeModel,
   val collectionDSLs: List<CollectionDSLModel>,
   val mapDSLs: List<MapDSLModel>,
   val typeDLSs: List<TypeDSLModel>
@@ -16,14 +16,20 @@ sealed class DSLFileModel(
   val packageName: String,
   val name: String
 ) {
-  val qualified get() = "$packageName.$name"
+  val qualified = "$packageName.$name"
 }
 
-class DSLMarkerModel(packageName: String, name: String) : DSLFileModel(packageName, name)
+class DSLScopeModel(packageName: String, name: String)
+  : DSLFileModel(packageName, name)
+{
+  val marker = "${name}Marker"
+  val declarations = setOf("$packageName.$name", "$packageName.$marker")
+}
 
 class CollectionDSLModel(
   packageName: String,
   name: String,
+  val scope: DSLScopeModel,
   val imports: Set<String>,
   val comment: String,
   val annotations: Set<String>,
@@ -36,6 +42,7 @@ class CollectionDSLModel(
 class MapDSLModel(
   packageName: String,
   name: String,
+  val scope: DSLScopeModel,
   val imports: Set<String>,
   val comment: String,
   val annotations: Set<String>,
@@ -49,6 +56,7 @@ class MapDSLModel(
 class TypeDSLModel(
   packageName: String,
   name: String,
+  val scope: DSLScopeModel,
   val imports: Set<String>,
   val comment: String,
   val annotations: Set<String>,

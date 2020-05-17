@@ -15,11 +15,15 @@ fun header() = """
   
 """
 
-fun dslMarker(model: DSLMarkerModel) = """
+fun dslScope(model: DSLScopeModel) = """
   package ${model.packageName}
 
   @DslMarker
-  annotation class ${model.name}
+  annotation class ${model.marker}
+  
+  class ${model.name} {
+    companion object
+  }
 
 """
 
@@ -77,6 +81,12 @@ fun collectionDSL(model: CollectionDSLModel) = """
     * ${comment(model.comment)}
     */
   inline fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
+    ${model.name}(mutableListOf<${model.targetType}>()).apply(dslBlock).build()
+
+  /**
+    * ${comment(model.comment)}
+    */
+  inline fun ${model.scope.name}.Companion.${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
     ${model.name}(mutableListOf<${model.targetType}>()).apply(dslBlock).build()
 
 """
@@ -143,6 +153,12 @@ fun mapDSL(model: MapDSLModel) = """
   inline fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
     ${model.name}(mutableMapOf<${model.keyType}, ${model.targetType}>()).apply(dslBlock).build()
 
+  /**
+    * ${comment(model.comment)}
+    */
+  inline fun ${model.scope.name}.Companion.${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
+    ${model.name}(mutableMapOf<${model.keyType}, ${model.targetType}>()).apply(dslBlock).build()
+
 """
 
 
@@ -174,6 +190,12 @@ fun typeDSL(model: TypeDSLModel) = """
     * ${comment(model.comment)}
     */
   inline fun ${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
+    ${model.name}(${model.targetType}.builder()).apply(dslBlock).build()
+
+  /**
+    * ${comment(model.comment)}
+    */
+  inline fun ${model.scope.name}.Companion.${model.dslEntrypoint}(dslBlock: ${model.name}.() -> Unit) =
     ${model.name}(${model.targetType}.builder()).apply(dslBlock).build()
 
   ${extDSLs(model.extDSLs)}

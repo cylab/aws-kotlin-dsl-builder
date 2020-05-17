@@ -19,7 +19,7 @@ fun generateDSL(superType: Class<*>, sourcePackage: String, targetPackage: Strin
   logger.info("Generating to ${outputDir.absolutePath}")
   outputDir.deleteRecursively()
   outputDir.mkdirs()
-  generateKotlin(::dslMarker, targetModel.dslMarker, outputDir )
+  generateKotlin(::dslScope, targetModel.dslScope, outputDir )
   generateKotlin(::collectionDSL, targetModel.collectionDSLs, outputDir)
   generateKotlin(::mapDSL, targetModel.mapDSLs, outputDir)
   generateKotlin(::typeDSL, targetModel.typeDLSs, outputDir)
